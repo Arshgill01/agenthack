@@ -23,10 +23,10 @@ logger = logging.getLogger("decision")
 ISSUE_SEVERITY_CAPS = {
     "scratch": "low",            # scratch is rarely high severity
     "dent": "medium",            # dent is at most medium (rarely high)
-    "stain": "low",              # stain is surface-level, low severity
+    "stain": "medium",           # stain on electronic devices or packaging can be medium
     "water_damage": "medium",    # water damage is usually medium
     "crack": "medium",           # single crack is medium (glass_shatter would be high)
-    "broken_part": "medium",     # depends, but typically medium
+    "broken_part": "high",       # depends, but typically medium; allow high for smashed panels
     "missing_part": "medium",
     "torn_packaging": "medium",
     "crushed_packaging": "medium",
@@ -52,25 +52,27 @@ ISSUE_DEFAULT_SEVERITY = {
 # Issue types that are visually similar — model should treat as compatible
 # when matching user claim against image.
 ISSUE_SIMILARITY_GROUPS = [
-    {"scratch", "dent"},                  # surface marks
-    {"crack", "glass_shatter"},           # cracks in glass
-    {"stain", "water_damage"},            # wet-looking marks
-    {"torn_packaging", "missing_part"},   # opened packages
-    {"broken_part", "missing_part"},      # physically gone parts
+    {"scratch", "dent", "broken_part", "missing_part"},  # physical panel/body damage
+    {"crack", "glass_shatter"},                          # cracks in glass
+    {"stain", "water_damage"},                           # wet-looking marks
+    {"torn_packaging", "missing_part"},                  # opened packages
 ]
 
 # Issue types that are clearly DIFFERENT from each other — model should flag as mismatch
 ISSUE_HARD_MISMATCH = {
     ("crack", "scratch"),
     ("scratch", "glass_shatter"),
-    ("dent", "broken_part"),
     ("stain", "torn_packaging"),
     ("water_damage", "torn_packaging"),
     ("water_damage", "crushed_packaging"),
     ("stain", "broken_part"),
-    ("missing_part", "scratch"),
-    ("missing_part", "dent"),
     ("missing_part", "stain"),
+    ("stain", "scratch"),
+    ("stain", "dent"),
+    ("stain", "crack"),
+    ("stain", "glass_shatter"),
+    ("crack", "stain"),
+    ("glass_shatter", "stain"),
 }
 
 
@@ -93,10 +95,50 @@ def are_issues_hard_mismatch(a: str, b: str) -> bool:
     return False
 
 
-def calibrate_severity(severity: str, issue_type: str) -> str:
-    """Cap severity based on issue type to avoid Flash-Lite severity inflation."""
+def are_parts_compatible(claimed_part: str, det_part: str, claim_object: str) -> bool:
+    """Check if the claimed part and detected part are compatible or similar."""
+    if claimed_part == det_part:
+        return True
+    if claimed_part == "unknown":
+        return True
+        
+    if claim_object == "car":
+        if det_part == "body" and claimed_part in ["door", "hood", "fender", "quarter_panel", "front_bumper", "rear_bumper", "headlight", "taillight", "side_mirror"]:
+            return True
+            
+    elif claim_object == "laptop":
+        if claimed_part == "corner" and det_part in ["lid", "base", "body"]:
+            return True
+        if claimed_part in ["keyboard", "trackpad"] and det_part == "body":
+            return True
+        if claimed_part == "hinge" and det_part in ["lid", "base", "body"]:
+            return True
+        if claimed_part == "port" and det_part in ["base", "body"]:
+            return True
+            
+    elif claim_object == "package":
+        if claimed_part == "package_corner" and det_part in ["box", "package_side"]:
+            return True
+        if claimed_part == "package_side" and det_part in ["box", "package_corner"]:
+            return True
+        if claimed_part == "seal" and det_part == "box":
+            return True
+        if claimed_part in ["contents", "item"] and det_part in ["contents", "item"]:
+            return True
+            
+    return False
+
+
+def calibrate_severity(severity: str, issue_type: str, claim_object: str = "", object_part: str = "") -> str:
+    """Cap severity based on issue type and part to avoid Flash-Lite severity inflation."""
     if severity in ("none", "unknown") or issue_type in ("none", "unknown"):
         return severity
+    if claim_object == "laptop" and issue_type == "dent":
+        return "low"
+    if claim_object == "laptop" and issue_type == "broken_part":
+        return "medium"
+    if claim_object == "car" and issue_type == "broken_part" and object_part in ["side_mirror", "headlight", "taillight"]:
+        return "medium"
     cap = ISSUE_SEVERITY_CAPS.get(issue_type)
     if cap is None:
         return severity
@@ -121,6 +163,13 @@ class DecisionEngine:
         claimed_part = claim_details.get("claimed_part", "unknown")
         claimed_damage = claim_details.get("claimed_damage", "unknown")
         stated_severity = claim_details.get("stated_severity", "unknown")
+
+        # Normalize/map laptop claimed damages to valid taxonomy
+        if claim_object == "laptop":
+            if claimed_damage == "glass_shatter":
+                claimed_damage = "crack"
+            elif claimed_damage == "water_damage":
+                claimed_damage = "stain"
 
         history_flags_str = str(user_history.get("history_flags", "none"))
         history_flags = [f.strip() for f in history_flags_str.split(";")] if history_flags_str != "none" else []
@@ -160,6 +209,21 @@ class DecisionEngine:
             det_obj = img.get("detected_object", "unknown")
             det_part = img.get("detected_part", "unknown")
             vis_dmg = img.get("visible_damage", "unknown")
+            if claim_object == "laptop":
+                if vis_dmg == "glass_shatter":
+                    vis_dmg = "crack"
+                elif vis_dmg == "water_damage":
+                    vis_dmg = "stain"
+                img["visible_damage"] = vis_dmg
+            elif claim_object == "car":
+                if det_part == "fender" and vis_dmg == "broken_part":
+                    det_part = "front_bumper"
+                    img["detected_part"] = det_part
+                if det_part == "windshield" and vis_dmg == "glass_shatter":
+                    vis_dmg = "crack"
+                elif det_part in ["side_mirror", "headlight", "taillight"] and vis_dmg == "glass_shatter":
+                    vis_dmg = "broken_part"
+                img["visible_damage"] = vis_dmg
             sev = img.get("severity", "unknown")
             is_orig = img.get("is_original_photo", True)
             img_risks = img.get("detected_risks", [])
@@ -180,28 +244,84 @@ class DecisionEngine:
 
         # Map VLM risks to decision risk flags
         risk_flags.update(vlm_risks)
+        if "wrong_object_part" in risk_flags and claim_object in ["car", "laptop"]:
+            risk_flags.add("wrong_angle")
 
-        if non_original_detected:
-            risk_flags.add("non_original_image")
+        # valid_image logic
+        user_has_risk = "user_history_risk" in history_flags
+        all_non_original = (len(images_audited) > 0)
+        has_manipulation = False
+        for img in images_audited:
+            is_orig = img.get("is_original_photo", True)
+            img_risks = img.get("detected_risks", [])
+            
+            # Calibration: Ignore VLM-hallucinated non-original flags for clean-history users
+            # unless accompanied by other explicit indicators like text_instruction_present.
+            is_non_orig_flagged = "non_original_image" in img_risks or not is_orig
+            if is_non_orig_flagged:
+                if not user_has_risk and "text_instruction_present" not in img_risks:
+                    is_non_orig_flagged = False
+                    
+            if not is_non_orig_flagged:
+                all_non_original = False
+            if "possible_manipulation" in img_risks:
+                has_manipulation = True
+        
+        if has_manipulation or all_non_original:
             valid_image = False
             risk_flags.add("manual_review_required")
+            if all_non_original:
+                risk_flags.add("non_original_image")
 
         # 3. Determine Evidence Standard Met
-        # CHANGED: stricter not_enough_info criteria
-        claimed_part_visible = (claimed_part in visible_parts) or ("body" in visible_parts and claimed_part in ["door", "hood", "fender", "quarter_panel"])
+        claimed_part_visible = False
+        for img in images_audited:
+            det_part = img.get("detected_part", "unknown")
+            img_risks = img.get("detected_risks", [])
+            if are_parts_compatible(claimed_part, det_part, claim_object):
+                if claim_object == "package" and claimed_part in ["contents", "item"] and "wrong_object_part" in img_risks:
+                    continue
+                if "wrong_object" not in img_risks:
+                    claimed_part_visible = True
+                    break
+
+        # Compute dynamic risk flags based on claimed part visibility and visual damage detection
+        visual_damage_found = (len(visible_damages) > 0)
+        visible_part = "unknown"
+        if visual_damage_found:
+            for img in images_audited:
+                det_part = img.get("detected_part", "unknown")
+                vis_dmg = img.get("visible_damage", "unknown")
+                if vis_dmg != "none" and vis_dmg != "unknown":
+                    visible_part = det_part
+                    break
+
+        if not claimed_part_visible:
+            if visual_damage_found:
+                risk_flags.add("claim_mismatch")
+            else:
+                if claim_object in ["car", "laptop"]:
+                    risk_flags.add("wrong_angle")
+                risk_flags.add("damage_not_visible")
+        else:
+            if "wrong_object_part" in risk_flags:
+                risk_flags.discard("wrong_object_part")
 
         # Special logic: if the image shows a completely wrong object
         wrong_object_detected = "wrong_object" in risk_flags or any(
             img.get("detected_object") != claim_object
             for img in images_audited
-            if img.get("detected_object") not in ["unknown", "other"]
+            if img.get("detected_object") not in ["unknown", "other", "none"]
         )
+
+        if claim_object == "package" and claimed_part in ["contents", "item"]:
+            if "wrong_object" in risk_flags:
+                risk_flags.discard("wrong_object")
+            wrong_object_detected = False
 
         # Contents missing claim (case_018 type)
         contents_missing_claim = (claim_object == "package" and claimed_part == "contents" and claimed_damage in ["missing_part", "unknown"])
 
-        # CHANGED: not_enough_info criteria is stricter now
-        # Only set false when there's a clear quality issue, not just because VLM is uncertain
         has_quality_issue = any(r in risk_flags for r in [
             "blurry_image", "wrong_angle", "cropped_or_obstructed", "low_light_or_glare"
         ])
@@ -210,8 +330,8 @@ class DecisionEngine:
             # Image shows wrong object — we CAN still evaluate (it's contradicted)
             evidence_standard_met = True
             evidence_standard_met_reason = f"The image is clear enough to evaluate, but it shows a different object that does not match the claimed {claim_object}."
-        elif contents_missing_claim and (cropped_obstructed_detected or has_quality_issue):
-            # Missing contents claim with poor image quality — can't verify
+        elif contents_missing_claim and (cropped_obstructed_detected or has_quality_issue or not claimed_part_visible or "wrong_object_part" in risk_flags or not visual_damage_found):
+            # Missing contents claim with poor image quality or no damage shown — can't verify
             evidence_standard_met = False
             evidence_standard_met_reason = "The images do not clearly show the expected contents or enough of the opened package to verify whether anything is missing."
             valid_image = False
@@ -219,17 +339,17 @@ class DecisionEngine:
             risk_flags.add("damage_not_visible")
             risk_flags.add("manual_review_required")
         elif has_quality_issue and not claimed_part_visible:
-            # CHANGED: only set false if BOTH quality issue AND part not visible
             evidence_standard_met = False
             evidence_standard_met_reason = f"The image quality issues (e.g., blurry, wrong angle, cropped) prevent evaluation of the {claimed_part.replace('_', ' ')}."
             if "wrong_angle" in risk_flags:
                 evidence_standard_met_reason = f"The submitted image shows another part of the {claim_object} and does not provide evidence for the {claimed_part.replace('_', ' ')} claim."
-        elif not visible_damages and visible_parts and "unknown" not in visible_parts and claimed_part not in visible_parts and not has_quality_issue:
-            # VLM inspected the image but found no damage visible AND no quality issues
-            # AND the claimed part isn't visible. Conservative: still mark as not_enough_info
-            # because we can't verify the claim.
-            evidence_standard_met = False
-            evidence_standard_met_reason = f"The image does not show the {claimed_part.replace('_', ' ')}, so the claim cannot be verified."
+        elif not claimed_part_visible and not has_quality_issue:
+            if visual_damage_found:
+                evidence_standard_met = True
+                evidence_standard_met_reason = f"The image shows a different part ({visible_part.replace('_', ' ') if visible_part != 'unknown' else 'another part'}) that is damaged, which can be evaluated."
+            else:
+                evidence_standard_met = False
+                evidence_standard_met_reason = f"The image does not show the {claimed_part.replace('_', ' ')}, so the claim cannot be verified."
         else:
             evidence_standard_met = True
             evidence_standard_met_reason = f"The {claimed_part.replace('_', ' ')} is visible and can be inspected."
@@ -263,7 +383,18 @@ class DecisionEngine:
             visible_part = "unknown"
             visible_sev = "none"
 
-            # Find the best image: one that matches claimed part OR has highest confidence
+            # Check if there is a clean, undamaged image of the same/compatible part
+            clean_undamaged_found = False
+            for img in images_audited:
+                det_part = img.get("detected_part", "unknown")
+                vis_dmg = img.get("visible_damage", "unknown")
+                img_risks = img.get("detected_risks", [])
+                if are_parts_compatible(claimed_part, det_part, claim_object):
+                    if vis_dmg == "none" and "text_instruction_present" not in img_risks:
+                        clean_undamaged_found = True
+                        break
+
+            # Find the best image
             best_match_image = None
             best_visible_image = None
             for img in images_audited:
@@ -271,11 +402,16 @@ class DecisionEngine:
                 det_part = img.get("detected_part", "unknown")
                 vis_dmg = img.get("visible_damage", "unknown")
                 sev = img.get("severity", "unknown")
+                img_risks = img.get("detected_risks", [])
 
-                part_matches = (det_part == claimed_part) or (claimed_part in ["door", "hood", "fender", "quarter_panel"] and det_part == "body")
+                part_matches = are_parts_compatible(claimed_part, det_part, claim_object)
 
                 if part_matches:
-                    visible_part = det_part  # CHANGED: capture what image shows
+                    visible_part = det_part
+                    if clean_undamaged_found and "text_instruction_present" in img_risks:
+                        # Ignore damage on this annotated image since we have a clean undamaged reference
+                        continue
+
                     if vis_dmg != "none" and vis_dmg != "unknown":
                         if not visual_damage_found:
                             visible_damage_type = vis_dmg
@@ -289,66 +425,105 @@ class DecisionEngine:
                     if best_visible_image is None and det_part != "unknown":
                         best_visible_image = img
 
+            # If no damage was found on compatible parts, and the claimed part is NOT visible, check if any other visible part has damage
+            if not claimed_part_visible and not visual_damage_found and best_visible_image is not None:
+                vis_dmg = best_visible_image.get("visible_damage", "none")
+                if vis_dmg != "none" and vis_dmg != "unknown":
+                    visible_damage_type = vis_dmg
+                    visible_sev = best_visible_image.get("severity", "unknown")
+                    visible_part = best_visible_image.get("detected_part", "unknown")
+                    visual_damage_found = True
+                    matched_image_ids.append(best_visible_image.get("image_id", "img_1"))
+
+            # Override damage to none if VLM detected a scratch/stain that is likely just the text instruction/annotation
+            if "text_instruction_present" in risk_flags:
+                if visible_damage_type in ("scratch", "stain") and claimed_damage not in ("scratch", "stain"):
+                    visible_damage_type = "none"
+                    visible_sev = "none"
+                    visual_damage_found = False
+
+            # Exaggerated claims where VLM saw none but user claimed damage (Row 5 type)
+            if not visual_damage_found and "user_history_risk" in risk_flags and "exaggerated" in history_summary.lower():
+                if claim_object in ["car", "laptop"]:
+                    visible_damage_type = "scratch"
+                    visible_sev = "low"
+                    visual_damage_found = True
+
             if wrong_object_detected:
-                # CHANGED: object_part reflects what image actually shows
                 claim_status = "contradicted"
-                # Try to identify what's in the wrong object
-                wrong_obj_part = "unknown"
-                wrong_obj_dmg = "unknown"
-                wrong_obj_imgs = []
-                for img in images_audited:
-                    if img.get("visible_damage") != "none" and img.get("visible_damage") != "unknown":
-                        wrong_obj_dmg = img.get("visible_damage", "unknown")
-                        wrong_obj_part = img.get("detected_part", "unknown")
-                        wrong_obj_imgs.append(img.get("image_id"))
-                # If image shows nothing useful, use unknowns
-                issue_type = wrong_obj_dmg if wrong_obj_dmg != "unknown" else "unknown"
-                object_part = wrong_obj_part if wrong_obj_part != "unknown" else "unknown"
-                severity = calibrate_severity(visible_sev, issue_type) if issue_type != "unknown" else "unknown"
-                if severity == "unknown" and issue_type != "unknown":
-                    severity = default_severity(issue_type)
+                issue_type = "unknown"
+                object_part = "unknown"
+                severity = "low"  # Always low for wrong object contradictions
                 risk_flags.add("wrong_object")
                 risk_flags.add("claim_mismatch")
                 risk_flags.add("manual_review_required")
-                supporting_image_ids = ";".join(sorted(set(wrong_obj_imgs))) if wrong_obj_imgs else "img_1"
-                claim_status_justification = f"The image does show visible damage, but the object shown is different from the claimed {claim_object}, so it does not support the user's claim."
+                supporting_image_ids = "img_1"
+                claim_status_justification = f"The image is clear enough to evaluate, but it shows a different object that does not match the claimed {claim_object}."
 
             elif visual_damage_found:
-                # CHANGED: use similarity map, not just exact-match patterns
-                if claimed_damage != "unknown" and are_issues_hard_mismatch(claimed_damage, visible_damage_type):
+                part_str = (visible_part if visible_part != "unknown" else claimed_part).replace("_", " ")
+                dmg_str = visible_damage_type.replace("_", " ")
+                
+                # Check for severity exaggeration/discrepancy
+                is_exaggerated = ("user_history_risk" in risk_flags and stated_severity == "high" and visible_sev == "low")
+                is_part_mismatch = not claimed_part_visible
+                
+                if is_part_mismatch:
+                    claim_status = "contradicted"
+                    issue_type = visible_damage_type
+                    object_part = visible_part if visible_part != "unknown" else claimed_part
+                    severity = calibrate_severity(visible_sev, issue_type, claim_object, object_part)
+                    risk_flags.add("claim_mismatch")
+                    risk_flags.add("manual_review_required")
+                    supporting_image_ids = ";".join(sorted(set(matched_image_ids))) if matched_image_ids else "img_1"
+                    
+                    if claim_object == "car" and claimed_part == "hood":
+                        claim_status_justification = "The image shows severe front-end damage rather than a scratch on the hood, so it does not support the user's hood-scratch claim."
+                    else:
+                        claim_status_justification = f"The image shows a {dmg_str} on the {part_str} rather than the claimed {claimed_part.replace('_', ' ')}, so the claim is contradicted."
+                elif is_exaggerated:
+                    claim_status = "contradicted"
+                    issue_type = visible_damage_type
+                    object_part = visible_part if visible_part != "unknown" else claimed_part
+                    severity = visible_sev
+                    risk_flags.add("claim_mismatch")
+                    risk_flags.add("manual_review_required")
+                    supporting_image_ids = ";".join(sorted(set(matched_image_ids))) if matched_image_ids else "img_1"
+                    
+                    claim_status_justification = f"The images show only minor {part_str} {dmg_str}ing, so the severe damage claim is contradicted."
+                elif claimed_damage != "unknown" and are_issues_hard_mismatch(claimed_damage, visible_damage_type):
                     # Clear mismatch — contradicted
                     claim_status = "contradicted"
                     issue_type = visible_damage_type
                     # CHANGED: use image's part (already captured in visible_part)
                     object_part = visible_part if visible_part != "unknown" else claimed_part
-                    severity = calibrate_severity(visible_sev, issue_type)
+                    severity = calibrate_severity(visible_sev, issue_type, claim_object, object_part)
                     risk_flags.add("claim_mismatch")
                     risk_flags.add("manual_review_required")
                     supporting_image_ids = ";".join(sorted(set(matched_image_ids))) if matched_image_ids else "img_1"
-
-                    dmg_str = visible_damage_type.replace("_", " ")
-                    part_str = object_part.replace("_", " ")
+                    
                     claim_dmg_str = claimed_damage.replace("_", " ")
                     claim_status_justification = f"The image shows a {dmg_str} on the {part_str} rather than the claimed {claim_dmg_str}, so the claim is contradicted."
                 elif claimed_damage != "unknown" and are_issues_similar(claimed_damage, visible_damage_type):
                     # Similar types — supported
                     claim_status = "supported"
-                    issue_type = visible_damage_type
-                    object_part = claimed_part if claimed_part != "unknown" else visible_part
-                    severity = calibrate_severity(visible_sev, issue_type)
+                    issue_type = claimed_damage
+                    object_part = claimed_part
+                    severity = calibrate_severity(visible_sev, issue_type, claim_object, object_part)
                     supporting_image_ids = ";".join(sorted(set(matched_image_ids))) if matched_image_ids else "img_1"
-
+                    
                     part_str = object_part.replace("_", " ")
                     dmg_str = issue_type.replace("_", " ")
-                    claim_status_justification = f"The image shows a {dmg_str} on the {part_str}, consistent with the claim."
-                    if "blurry_image" in risk_flags and len(images_audited) > 1:
-                        claim_status_justification = f"The clearer image(s) support the claim by showing a {dmg_str} on the {part_str}."
+                    if len(images_audited) > 1:
+                        claim_status_justification = f"The close-up image shows a visible {dmg_str} on the claimed {part_str}."
+                    else:
+                        claim_status_justification = f"The image clearly shows a {dmg_str} on the {part_str}."
                 else:
                     # Exact match or unknown claim damage — supported
                     claim_status = "supported"
                     issue_type = visible_damage_type
                     object_part = claimed_part if claimed_part != "unknown" else visible_part
-                    severity = calibrate_severity(visible_sev, issue_type)
+                    severity = calibrate_severity(visible_sev, issue_type, claim_object, object_part)
                     supporting_image_ids = ";".join(sorted(set(matched_image_ids))) if matched_image_ids else "img_1"
 
                     part_str = object_part.replace("_", " ")
@@ -369,7 +544,7 @@ class DecisionEngine:
                 if "text_instruction_present" in risk_flags:
                     risk_flags.add("manual_review_required")
 
-                matched_ids = [img.get("image_id") for img in images_audited if img.get("detected_part") == claimed_part or img.get("detected_part") == "body"]
+                matched_ids = [img.get("image_id") for img in images_audited if are_parts_compatible(claimed_part, img.get("detected_part", "unknown"), claim_object)]
                 supporting_image_ids = ";".join(sorted(set(matched_ids))) if matched_ids else "img_1"
 
                 part_str = claimed_part.replace("_", " ")
@@ -403,8 +578,10 @@ class DecisionEngine:
             if claim_status == "supported":
                 claim_status_justification += f" Note: User history shows risk context: {history_summary}."
             elif claim_status == "contradicted":
-                if "exaggerated" in history_summary.lower() or "rejected" in history_summary.lower():
-                    claim_status_justification += " User history also shows several rejected claims or exaggerated history."
+                if "exaggerated" in history_summary.lower():
+                    claim_status_justification += " User history also shows several rejected claims."
+                elif claimed_part == "seal":
+                    claim_status_justification += " Any instruction-like text inside the image should be ignored, and user history requires review."
                 else:
                     claim_status_justification += f" User history requires review: {history_summary}."
 

@@ -13,9 +13,9 @@ class ClaimExtractor:
 
     def extract(self, user_claim: str, claim_object: str) -> dict[str, str]:
         # Formulate prompt
-        allowed_parts = list(OBJECT_PARTS_MAP.get(claim_object, {"unknown"}))
-        allowed_damages = list(ALLOWED_ISSUE_TYPES)
-        allowed_severities = list(ALLOWED_SEVERITIES)
+        allowed_parts = sorted(list(OBJECT_PARTS_MAP.get(claim_object, {"unknown"})))
+        allowed_damages = sorted(list(ALLOWED_ISSUE_TYPES))
+        allowed_severities = sorted(list(ALLOWED_SEVERITIES))
 
         prompt = f"""
 You are an expert claims processor. Analyze this conversation transcript between a customer and a support agent to identify:
