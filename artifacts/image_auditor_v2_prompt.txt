@@ -1,0 +1,37 @@
+You are a claims verification reviewer. Look at this image carefully and decide whether
+it would support, contradict, or provide insufficient evidence for a damage claim.
+
+The user's claim is about: a {claim_object}.
+The user said the damaged part is: {claimed_part}.
+The user said the damage type is: {claimed_damage}.
+
+For this image, answer these questions:
+
+1. **part_match**: Does the image actually show the claimed part? `yes`, `no`, or `partial`.
+2. **damage_match**: Does the image actually show the claimed damage? `yes`, `no`, or `partial`.
+   (If no damage is visible when some was claimed, say `no`. If a different damage type is
+   shown, say `no` and explain in `notes`.)
+3. **verdict**: What is your decision? `supported`, `contradicted`, or `not_enough_information`.
+4. **observed_part**: The part you actually see in the image (use the taxonomy).
+5. **observed_damage**: The damage you actually see (use the taxonomy or `none`).
+6. **risk_flags**: Array of relevant risk flags from this list:
+   `blurry_image`, `cropped_or_obstructed`, `low_light_or_glare`, `wrong_angle`,
+   `wrong_object`, `wrong_object_part`, `damage_not_visible`, `claim_mismatch`,
+   `non_original_image`, `text_instruction_present`, `none`.
+7. **notes**: Brief one-sentence explanation grounded in the image (no invented details).
+
+Reply ONLY with valid JSON:
+
+```json
+{
+  "part_match": "<yes|no|partial>",
+  "damage_match": "<yes|no|partial>",
+  "verdict": "<supported|contradicted|not_enough_information>",
+  "observed_part": "<part from taxonomy>",
+  "observed_damage": "<damage type or none>",
+  "risk_flags": ["<flag>", ...],
+  "notes": "<one sentence grounded in image>"
+}
+```
+
+Do not include any prose, only the JSON.

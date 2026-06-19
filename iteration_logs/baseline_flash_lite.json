@@ -1,0 +1,504 @@
+{
+  "total_claims": 20,
+  "accuracies": {
+    "claim_status": 0.7,
+    "object_part": 0.85,
+    "issue_type": 0.45,
+    "severity": 0.25,
+    "evidence_standard_met": 0.85,
+    "valid_image": 0.85
+  },
+  "failures_count": 14,
+  "failures": [
+    {
+      "row_index": 2,
+      "user_id": "user_002",
+      "object": "car",
+      "status": {
+        "expected": "supported",
+        "predicted": "supported",
+        "match": true
+      },
+      "object_part": {
+        "expected": "front_bumper",
+        "predicted": "front_bumper",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "scratch",
+        "predicted": "dent",
+        "match": false
+      },
+      "severity": {
+        "expected": "low",
+        "predicted": "high",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 3,
+      "user_id": "user_004",
+      "object": "car",
+      "status": {
+        "expected": "supported",
+        "predicted": "supported",
+        "match": true
+      },
+      "object_part": {
+        "expected": "windshield",
+        "predicted": "windshield",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "crack",
+        "predicted": "glass_shatter",
+        "match": false
+      },
+      "severity": {
+        "expected": "medium",
+        "predicted": "high",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 4,
+      "user_id": "user_007",
+      "object": "car",
+      "status": {
+        "expected": "supported",
+        "predicted": "supported",
+        "match": true
+      },
+      "object_part": {
+        "expected": "side_mirror",
+        "predicted": "side_mirror",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "broken_part",
+        "predicted": "glass_shatter",
+        "match": false
+      },
+      "severity": {
+        "expected": "medium",
+        "predicted": "high",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 5,
+      "user_id": "user_005",
+      "object": "car",
+      "status": {
+        "expected": "contradicted",
+        "predicted": "supported",
+        "match": false
+      },
+      "object_part": {
+        "expected": "rear_bumper",
+        "predicted": "rear_bumper",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "scratch",
+        "predicted": "dent",
+        "match": false
+      },
+      "severity": {
+        "expected": "low",
+        "predicted": "medium",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 8,
+      "user_id": "user_008",
+      "object": "car",
+      "status": {
+        "expected": "contradicted",
+        "predicted": "contradicted",
+        "match": true
+      },
+      "object_part": {
+        "expected": "front_bumper",
+        "predicted": "hood",
+        "match": false
+      },
+      "issue_type": {
+        "expected": "broken_part",
+        "predicted": "broken_part",
+        "match": true
+      },
+      "severity": {
+        "expected": "high",
+        "predicted": "high",
+        "match": true
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "false",
+        "predicted": "false",
+        "match": true
+      }
+    },
+    {
+      "row_index": 9,
+      "user_id": "user_009",
+      "object": "laptop",
+      "status": {
+        "expected": "supported",
+        "predicted": "supported",
+        "match": true
+      },
+      "object_part": {
+        "expected": "screen",
+        "predicted": "screen",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "crack",
+        "predicted": "glass_shatter",
+        "match": false
+      },
+      "severity": {
+        "expected": "medium",
+        "predicted": "high",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 11,
+      "user_id": "user_011",
+      "object": "laptop",
+      "status": {
+        "expected": "supported",
+        "predicted": "supported",
+        "match": true
+      },
+      "object_part": {
+        "expected": "keyboard",
+        "predicted": "keyboard",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "stain",
+        "predicted": "water_damage",
+        "match": false
+      },
+      "severity": {
+        "expected": "medium",
+        "predicted": "high",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 12,
+      "user_id": "user_012",
+      "object": "laptop",
+      "status": {
+        "expected": "supported",
+        "predicted": "not_enough_information",
+        "match": false
+      },
+      "object_part": {
+        "expected": "corner",
+        "predicted": "corner",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "dent",
+        "predicted": "unknown",
+        "match": false
+      },
+      "severity": {
+        "expected": "low",
+        "predicted": "unknown",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "false",
+        "match": false
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 13,
+      "user_id": "user_018",
+      "object": "laptop",
+      "status": {
+        "expected": "supported",
+        "predicted": "supported",
+        "match": true
+      },
+      "object_part": {
+        "expected": "screen",
+        "predicted": "screen",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "crack",
+        "predicted": "glass_shatter",
+        "match": false
+      },
+      "severity": {
+        "expected": "medium",
+        "predicted": "high",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 14,
+      "user_id": "user_020",
+      "object": "laptop",
+      "status": {
+        "expected": "contradicted",
+        "predicted": "supported",
+        "match": false
+      },
+      "object_part": {
+        "expected": "trackpad",
+        "predicted": "trackpad",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "none",
+        "predicted": "scratch",
+        "match": false
+      },
+      "severity": {
+        "expected": "none",
+        "predicted": "low",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 17,
+      "user_id": "user_031",
+      "object": "package",
+      "status": {
+        "expected": "supported",
+        "predicted": "supported",
+        "match": true
+      },
+      "object_part": {
+        "expected": "package_side",
+        "predicted": "box",
+        "match": false
+      },
+      "issue_type": {
+        "expected": "water_damage",
+        "predicted": "water_damage",
+        "match": true
+      },
+      "severity": {
+        "expected": "medium",
+        "predicted": "medium",
+        "match": true
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 18,
+      "user_id": "user_032",
+      "object": "package",
+      "status": {
+        "expected": "not_enough_information",
+        "predicted": "supported",
+        "match": false
+      },
+      "object_part": {
+        "expected": "contents",
+        "predicted": "contents",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "unknown",
+        "predicted": "missing_part",
+        "match": false
+      },
+      "severity": {
+        "expected": "unknown",
+        "predicted": "high",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "false",
+        "predicted": "true",
+        "match": false
+      },
+      "valid_image": {
+        "expected": "false",
+        "predicted": "true",
+        "match": false
+      }
+    },
+    {
+      "row_index": 19,
+      "user_id": "user_033",
+      "object": "package",
+      "status": {
+        "expected": "contradicted",
+        "predicted": "not_enough_information",
+        "match": false
+      },
+      "object_part": {
+        "expected": "unknown",
+        "predicted": "box",
+        "match": false
+      },
+      "issue_type": {
+        "expected": "unknown",
+        "predicted": "unknown",
+        "match": true
+      },
+      "severity": {
+        "expected": "low",
+        "predicted": "unknown",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "false",
+        "match": false
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      }
+    },
+    {
+      "row_index": 20,
+      "user_id": "user_034",
+      "object": "package",
+      "status": {
+        "expected": "contradicted",
+        "predicted": "supported",
+        "match": false
+      },
+      "object_part": {
+        "expected": "seal",
+        "predicted": "seal",
+        "match": true
+      },
+      "issue_type": {
+        "expected": "none",
+        "predicted": "torn_packaging",
+        "match": false
+      },
+      "severity": {
+        "expected": "none",
+        "predicted": "high",
+        "match": false
+      },
+      "evidence_standard_met": {
+        "expected": "true",
+        "predicted": "true",
+        "match": true
+      },
+      "valid_image": {
+        "expected": "true",
+        "predicted": "false",
+        "match": false
+      }
+    }
+  ]
+}
