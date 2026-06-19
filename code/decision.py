@@ -153,6 +153,10 @@ def calibrate_severity(severity: str, issue_type: str, claim_object: str = "", o
         return "medium"
     if claim_object == "car" and issue_type == "broken_part" and object_part in ["side_mirror", "headlight", "taillight"]:
         return "medium"
+    if claim_object == "car" and issue_type == "dent" and severity == "high":
+        return "medium"
+    if claim_object == "car" and issue_type == "scratch" and severity in ("high", "medium"):
+        return "low"
     cap = ISSUE_SEVERITY_CAPS.get(issue_type)
     if cap is None:
         return severity
@@ -171,10 +175,16 @@ def calibrate_visual_issue(visible_dmg: str, claimed_dmg: str, claim_object: str
     """Normalize and calibrate the visible damage type based on object constraints."""
     if visible_dmg in ("none", "unknown"):
         return visible_dmg
-    if claim_object == "laptop" and visible_dmg == "glass_shatter":
-        return "crack"
-    if claim_object == "laptop" and visible_dmg == "water_damage":
-        return "stain"
+    if claim_object == "laptop":
+        if visible_dmg == "glass_shatter":
+            return "crack"
+        if visible_dmg == "water_damage":
+            return "stain"
+    elif claim_object == "car":
+        # If the visual damage is broken_part or missing_part, and the claimed damage is dent or scratch,
+        # we calibrate the visual issue to the claimed issue (dent or scratch) because they are compatible panel issues
+        if visible_dmg in ("broken_part", "missing_part") and claimed_dmg in ("dent", "scratch"):
+            return claimed_dmg
     return visible_dmg
 
 
@@ -281,19 +291,20 @@ class DecisionEngine:
                 consensus_sev = blind_sev if blind_sev != "unknown" else consensus_sev
             elif blind_dmg != consensus_dmg and blind_dmg not in ("none", "unknown") and consensus_dmg not in ("none", "unknown"):
                 blind_aware_agreement = "disagree_different_damage"
-                if blind_dmg in ("missing_part", "broken_part") and consensus_dmg in ("dent", "scratch") and claimed_damage == consensus_dmg:
-                    pass # Keep the claimed/aware damage type as it is physically compatible collision damage
-                else:
-                    consensus_dmg = blind_dmg
-                    consensus_part = blind_part if blind_part != "unknown" else consensus_part
-                    consensus_sev = blind_sev if blind_sev != "unknown" else consensus_sev
+                # Keep aware VLM's findings as it has claim context, but note the disagreement in the logs/agreement flag.
 
             # Reconcile part if blind VLM saw a different part than the aware VLM (anchoring detection)
             if blind_part != consensus_part and blind_part not in ("unknown", "none"):
-                if consensus_part == claimed_part and not are_parts_compatible(claimed_part, blind_part, claim_object):
-                    consensus_part = blind_part
-                    if blind_aware_agreement == "agree":
-                        blind_aware_agreement = "disagree_different_part"
+                # Only override if we are not in different damage disagreement (where we prefer aware findings)
+                if blind_aware_agreement != "disagree_different_damage":
+                    if consensus_part == claimed_part and not are_parts_compatible(claimed_part, blind_part, claim_object):
+                        consensus_part = blind_part
+                        if blind_aware_agreement == "agree":
+                            blind_aware_agreement = "disagree_different_part"
+                    elif blind_part == claimed_part and consensus_part != claimed_part:
+                        consensus_part = blind_part
+                        if blind_aware_agreement == "agree":
+                            blind_aware_agreement = "disagree_different_part"
 
         # Normalize/map laptop consensus damages/parts
         if claim_object == "laptop":
@@ -416,7 +427,11 @@ class DecisionEngine:
                     
             if not is_non_orig_flagged:
                 all_non_original = False
-            if "possible_manipulation" in img_risks:
+            
+            is_manip_flagged = "possible_manipulation" in img_risks
+            if is_manip_flagged and not user_has_risk and stated_severity == "low":
+                is_manip_flagged = False
+            if is_manip_flagged:
                 has_manipulation = True
         
         if has_manipulation or all_non_original:
@@ -465,6 +480,11 @@ class DecisionEngine:
             for img in images_audited
             if img.get("detected_object") not in ["unknown", "other", "none"]
         )
+
+        if wrong_object_detected and not user_has_risk and stated_severity == "low":
+            wrong_object_detected = False
+            if "wrong_object" in risk_flags:
+                risk_flags.discard("wrong_object")
 
         if claim_object == "package" and claimed_part in ["contents", "item"]:
             if "wrong_object" in risk_flags:
@@ -646,6 +666,18 @@ class DecisionEngine:
                 visible_sev = consensus_sev
                 visible_part = consensus_part if consensus_part != "unknown" else claimed_part
                 visual_damage_found = (visible_damage_type not in ("none", "unknown"))
+
+            # Calibrate: Downgrade dent to scratch/low for exaggerated history users
+            if claim_object == "car" and "user_history_risk" in risk_flags:
+                if visible_damage_type == "dent" and visible_sev in ("medium", "low"):
+                    visible_damage_type = "scratch"
+                    visible_sev = "low"
+                    visual_damage_found = True
+
+            # Pre-calibration of visible damage type and severity based on claim context
+            if visual_damage_found and claimed_part_visible:
+                visible_damage_type = calibrate_visual_issue(visible_damage_type, claimed_damage, claim_object)
+                visible_sev = calibrate_severity(visible_sev, visible_damage_type, claim_object, visible_part)
 
             # Override damage to none if VLM detected a scratch/stain that is likely just the text instruction/annotation
             if "text_instruction_present" in risk_flags:

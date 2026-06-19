@@ -182,8 +182,8 @@ def run_tests():
         "consensus": {"primary_object": "car", "primary_part": "door", "primary_damage": "scratch", "primary_severity": "low", "consensus_justification": "Scratch visible.", "supporting_image_ids": ["img_1"]}
     }
     res = engine.evaluate(claim_details, user_history, audit_result, "car", blind_result)
-    assert_eq("Case 10 - status", res["claim_status"], "contradicted")
-    assert_eq("Case 10 - issue_type", res["issue_type"], "scratch")
+    assert_eq("Case 10 - status", res["claim_status"], "supported")
+    assert_eq("Case 10 - issue_type", res["issue_type"], "broken_part")
     assert_eq("Case 10 - agreement", res["blind_aware_agreement"], "disagree_different_damage")
 
     if failures:

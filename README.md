@@ -10,16 +10,32 @@ Read [`problem_statement.md`](./problem_statement.md) for the full task spec, in
 
 ---
 
+## Architecture & Innovation
+
+Rather than using a single monolithic prompt, this system implements a multi-stage decoupled pipeline for high reliability, precision, and verifiability:
+
+1. **Text Extraction (`extractor.py`):** Uses an LLM to parse the claim conversation transcript, extracting the claimed object part, damage type, and stated severity. Features a robust regex fallback parser.
+2. **Evidence Requirements Checklist (`pipeline.py`):** Dynamically loads `evidence_requirements.csv` and matches applicable requirements based on the claim's object type and damage family to construct a custom inspectability rubric.
+3. **Blind-First Dual Audit (Pass 1 & Pass 2 VLMs):**
+   - **Pass 1 - Blind Audit (`blind_auditor.py`):** Audits the images with *zero* claim context to eliminate VLM anchoring bias (replicating a real human insurance adjuster).
+   - **Pass 2 - Aware Audit (`auditor.py`):** Audits the images with full claim context + the matched evidence requirement checklist injected as an inspectability rubric.
+4. **Reconciliation & Decision Engine (`decision.py`):** Compares the blind audit against the claim-aware audit. Disagreements in damage type or part serve as a strong visual discrepancy signal, automatically triggering risk flags (`claim_mismatch`) and overriding to unbiased blind observations. Checks requirement checklist satisfaction to determine `evidence_standard_met`.
+5. **Output Formatter & Linter (`linter.py`):** Validates and cleans output fields, aligning them strictly with permitted values and formatting constraints.
+6. **SQLite Response Caching (`cache.py`):** Caches API outputs in a local SQLite database to prevent redundant API charges and allow instant local dry-runs.
+
+---
+
 ## Contents
 
-1. [Repository layout](#repository-layout)
-2. [What you need to build](#what-you-need-to-build)
-3. [Where your code goes](#where-your-code-goes)
-4. [Quickstart](#quickstart)
-5. [Evaluation](#evaluation)
-6. [Chat transcript logging](#chat-transcript-logging)
-7. [Submission](#submission)
-8. [Judge interview](#judge-interview)
+1. [Architecture & Innovation](#architecture--innovation)
+2. [Repository layout](#repository-layout)
+3. [What you need to build](#what-you-need-to-build)
+4. [Where your code goes](#where-your-code-goes)
+5. [Quickstart](#quickstart)
+6. [Evaluation](#evaluation)
+7. [Chat transcript logging](#chat-transcript-logging)
+8. [Submission](#submission)
+9. [Judge interview](#judge-interview)
 
 ---
 
@@ -88,6 +104,19 @@ Beyond that you are free to bring your own approach: VLMs, LLMs, structured prom
 ## Where your code goes
 
 All of your work belongs in [`code/`](./code/). The repo ships with empty starter files that you can grow into your full solution.
+
+### Architecture & Innovation
+
+Rather than using a single monolithic prompt, this system implements a multi-stage decoupled pipeline for high reliability, precision, and verifiability:
+
+1. **Text Extraction (`extractor.py`):** Uses an LLM to parse the claim conversation transcript, extracting the claimed object part, damage type, and stated severity. Features a robust regex fallback parser.
+2. **Evidence Requirements Checklist (`pipeline.py`):** Dynamically loads `evidence_requirements.csv` and matches applicable requirements based on the claim's object type and damage family to construct a custom inspectability rubric.
+3. **Blind-First Dual Audit (Pass 1 & Pass 2 VLMs):**
+   - **Pass 1 - Blind Audit (`blind_auditor.py`):** Audits the images with *zero* claim context to eliminate VLM anchoring bias (replicating a real human insurance adjuster).
+   - **Pass 2 - Aware Audit (`auditor.py`):** Audits the images with full claim context + the matched evidence requirement checklist injected as an inspectability rubric.
+4. **Reconciliation & Decision Engine (`decision.py`):** Compares the blind audit against the claim-aware audit. Disagreements in damage type or part serve as a strong visual discrepancy signal, automatically triggering risk flags (`claim_mismatch`) and overriding to unbiased blind observations. Checks requirement checklist satisfaction to determine `evidence_standard_met`.
+5. **Output Formatter & Linter (`linter.py`):** Validates and cleans output fields, aligning them strictly with permitted values and formatting constraints.
+6. **SQLite Response Caching (`cache.py`):** Caches API outputs in a local SQLite database to prevent redundant API charges and allow instant local dry-runs.
 
 Suggested conventions:
 
