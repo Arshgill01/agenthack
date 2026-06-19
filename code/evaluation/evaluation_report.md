@@ -5,27 +5,61 @@
 - **Total Claims Evaluated:** 20
 - **Claim Status Accuracy:** 95.00%
 - **Object Part Accuracy:** 100.00%
-- **Issue Type Accuracy:** 90.00%
-- **Severity Accuracy:** 85.00%
+- **Issue Type Accuracy:** 85.00%
+- **Severity Accuracy:** 90.00%
 - **Evidence Standard Met Accuracy:** 100.00%
-- **Valid Image Accuracy:** 90.00%
+- **Valid Image Accuracy:** 95.00%
+- **Risk Flags Exact Match Accuracy:** 15.00%
+- **Risk Flags Avg Jaccard Similarity:** 0.3767
+
+### Confusion Matrix (Claim Status)
+| Expected \ Predicted | Supported | Contradicted | Not Enough Info |
+|---|---|---|---|
+| **Supported** | 12 | 1 | 0 |
+| **Contradicted** | 0 | 5 | 0 |
+| **Not Enough Info** | 0 | 0 | 2 |
+
+
+### Per-Class Performance
+| Class | Precision | Recall | F1-Score | Support |
+|---|---|---|---|---|
+| Supported | 100.00% | 92.31% | 0.9600 | 13 |
+| Contradicted | 83.33% | 100.00% | 0.9091 | 5 |
+| Not Enough Information | 100.00% | 100.00% | 1.0000 | 2 |
+
+
+### Performance Breakdown by Object Type
+| Object Type | Claims | Claim Status Acc | Object Part Acc | Issue Type Acc | Severity Acc |
+|---|---|---|---|---|---|
+| Car | 8 | 87.50% | 100.00% | 62.50% | 75.00% |
+| Laptop | 6 | 100.00% | 100.00% | 100.00% | 100.00% |
+| Package | 6 | 100.00% | 100.00% | 100.00% | 100.00% |
+
+
+### Blind-vs-Aware VLM Audit Agreement Statistics
+| Agreement Category | Count | Percentage |
+|---|---|---|
+| Agree | 15 | 75.00% |
+| Disagree Different Damage | 4 | 20.00% |
+| Disagree Different Part | 1 | 5.00% |
+
 
 ## Configuration Details & Strategy
 
-- **Final Strategy:** Evidence-Grounded Damage Claims Agent (EGDCA) Pipeline.
-- **Model Configuration:** Primary visual audit performed by `gemini-1.5-flash` with direct REST fallbacks. Text extraction handled by LLM and a robust rule-based regex matcher fallback. Caching is managed locally using a multi-read-safe SQLite database to eliminate duplicate API requests during developer testing.
+- **Final Strategy:** Evidence-Grounded Damage Claims Agent (EGDCA) Pipeline with Blind-First Dual Audit.
+- **Model Configuration:** Visual audit performed in two passes (blind first, then claim-aware) by `gemini-3.5-flash` on Vertex AI. Caching is managed locally using a SQLite database to reduce API requests.
 
-## Operational Analysis (Sample Claims Set)
+## Operational Analysis (Actual Measured API Usage)
 
-- **Number of Model Calls:**
-  - Text Extraction calls: 20 (or 0 if fallback used)
-  - VLM Image Audit calls: 20 (or 0 if fallback used)
-- **Estimated Token Usage:**
-  - VLM Input Tokens: 37482
-  - VLM Output Tokens: 4000
-  - Text Input Tokens: 20000
-  - Text Output Tokens: 2000
+- **Number of Actual API Calls:**
+  - VLM Image Audit calls: 40
+  - Text Extraction calls: 20
+- **Actual Measured API Token Usage:**
+  - VLM Input Tokens: 117445
+  - VLM Output Tokens: 11628
+  - Text Input Tokens: 10320
+  - Text Output Tokens: 699
 - **Number of Images Processed:** 29
-- **Estimated Cost:** $0.00611 (pricing assumptions: Gemini 1.5 Flash input=$0.075/1M, output=$0.30/1M, image=258 tokens each)
+- **Actual Cost for this Run:** $0.01328 (pricing: input=$0.075/1M, output=$0.30/1M)
+- **Caching Note:** Cache hits consumed 0 actual API tokens and incurred $0.00 actual cost.
 - **Approximate Latency:** ~2.5 seconds per claim (without caching; ~0.01 seconds with caching)
-- **TPM/RPM and Rate Limits:** Handled via sequential execution and localized database caching. Rate limits are protected during dry runs.

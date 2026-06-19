@@ -6,3 +6,4 @@ code/.cache/
 code/evaluation/eval_results.json
 output.csv
 .env
+code.zip

@@ -102,6 +102,19 @@ class ModelClient:
         self.anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
         self.gemini_key = gemini_key
 
+        # Token usage tracking
+        self.usage_stats = {
+            "vlm_input_tokens": 0,
+            "vlm_output_tokens": 0,
+            "vlm_calls": 0,
+            "text_input_tokens": 0,
+            "text_output_tokens": 0,
+            "text_calls": 0
+        }
+
+    def get_usage_stats(self) -> dict[str, int]:
+        return self.usage_stats
+
     def _is_rate_limit(self, e: Exception) -> bool:
         err_str = str(e).lower()
         return any(x in err_str for x in ["429", "quota", "resourceexhausted", "rate limit", "too many requests"])
@@ -173,6 +186,10 @@ class ModelClient:
                     contents=prompt,
                     config=config
                 )
+                if hasattr(res, "usage_metadata") and res.usage_metadata:
+                    self.usage_stats["text_input_tokens"] += getattr(res.usage_metadata, "prompt_token_count", 0)
+                    self.usage_stats["text_output_tokens"] += getattr(res.usage_metadata, "candidates_token_count", 0) or getattr(res.usage_metadata, "response_token_count", 0)
+                self.usage_stats["text_calls"] += 1
                 if res.text:
                     return res.text.strip()
             except Exception as e:
@@ -298,6 +315,10 @@ class ModelClient:
                     model=self.vlm_model,
                     contents=contents
                 )
+                if hasattr(res, "usage_metadata") and res.usage_metadata:
+                    self.usage_stats["vlm_input_tokens"] += getattr(res.usage_metadata, "prompt_token_count", 0)
+                    self.usage_stats["vlm_output_tokens"] += getattr(res.usage_metadata, "candidates_token_count", 0) or getattr(res.usage_metadata, "response_token_count", 0)
+                self.usage_stats["vlm_calls"] += 1
                 if res.text:
                     return res.text.strip()
             except Exception as e:

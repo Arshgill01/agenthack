@@ -76,12 +76,19 @@ ISSUE_HARD_MISMATCH = {
 }
 
 
-def are_issues_similar(a: str, b: str) -> bool:
+def are_issues_similar(a: str, b: str, severity: str = "medium") -> bool:
     """Check if two issue types should be treated as compatible."""
     if a == b:
         return True
     if not a or not b or a == "unknown" or b == "unknown" or a == "none" or b == "none":
         return False
+    
+    # Allow dent/broken_part/missing_part compatibility for high severity structural damage
+    structural = {"dent", "broken_part", "missing_part"}
+    if a in structural and b in structural:
+        if severity == "high":
+            return True
+            
     for group in ISSUE_SIMILARITY_GROUPS:
         if a in group and b in group:
             return True
@@ -220,7 +227,7 @@ class DecisionEngine:
     def __init__(self):
         pass
 
-    def evaluate(self, claim_details: dict[str, str], user_history: dict[str, object], audit_result: dict[str, object], claim_object: str) -> dict[str, object]:
+    def evaluate(self, claim_details: dict[str, str], user_history: dict[str, object], audit_result: dict[str, object], claim_object: str, blind_result: dict[str, object] | None = None, matched_reqs: list[dict[str, str]] | None = None) -> dict[str, object]:
         claimed_part = claim_details.get("claimed_part", "unknown")
         claimed_damage = claim_details.get("claimed_damage", "unknown")
         stated_severity = claim_details.get("stated_severity", "unknown")
@@ -244,6 +251,49 @@ class DecisionEngine:
         consensus_dmg = consensus.get("primary_damage", "unknown")
         consensus_sev = consensus.get("primary_severity", "unknown")
         consensus_justification = consensus.get("consensus_justification", "")
+
+        # Reconciliation with blind_result
+        blind_aware_agreement = "unknown"
+        blind_anchoring_note = ""
+        if blind_result and blind_result.get("valid_call", True):
+            blind_consensus = blind_result.get("consensus", {})
+            blind_dmg = blind_consensus.get("primary_damage", "unknown")
+            blind_part = blind_consensus.get("primary_part", "unknown")
+            blind_sev = blind_consensus.get("primary_severity", "unknown")
+
+            # Normalize blind damage
+            if claim_object == "laptop":
+                if blind_dmg == "glass_shatter":
+                    blind_dmg = "crack"
+                elif blind_dmg == "water_damage":
+                    blind_dmg = "stain"
+
+            # Compare and reconcile
+            if blind_dmg == consensus_dmg:
+                blind_aware_agreement = "agree"
+            elif blind_dmg in ("none", "unknown") and consensus_dmg not in ("none", "unknown"):
+                blind_aware_agreement = "disagree_anchoring_risk"
+                blind_anchoring_note = "Note: Blind visual audit detected no damage, flagging potential claim anchoring risk."
+            elif blind_dmg not in ("none", "unknown") and consensus_dmg in ("none", "unknown"):
+                blind_aware_agreement = "disagree_damage_not_flagged"
+                consensus_dmg = blind_dmg
+                consensus_part = blind_part if blind_part != "unknown" else consensus_part
+                consensus_sev = blind_sev if blind_sev != "unknown" else consensus_sev
+            elif blind_dmg != consensus_dmg and blind_dmg not in ("none", "unknown") and consensus_dmg not in ("none", "unknown"):
+                blind_aware_agreement = "disagree_different_damage"
+                if blind_dmg in ("missing_part", "broken_part") and consensus_dmg in ("dent", "scratch") and claimed_damage == consensus_dmg:
+                    pass # Keep the claimed/aware damage type as it is physically compatible collision damage
+                else:
+                    consensus_dmg = blind_dmg
+                    consensus_part = blind_part if blind_part != "unknown" else consensus_part
+                    consensus_sev = blind_sev if blind_sev != "unknown" else consensus_sev
+
+            # Reconcile part if blind VLM saw a different part than the aware VLM (anchoring detection)
+            if blind_part != consensus_part and blind_part not in ("unknown", "none"):
+                if consensus_part == claimed_part and not are_parts_compatible(claimed_part, blind_part, claim_object):
+                    consensus_part = blind_part
+                    if blind_aware_agreement == "agree":
+                        blind_aware_agreement = "disagree_different_part"
 
         # Normalize/map laptop consensus damages/parts
         if claim_object == "laptop":
@@ -274,6 +324,12 @@ class DecisionEngine:
         evidence_standard_met = True
         evidence_standard_met_reason = ""
         risk_flags = set()
+
+        if blind_aware_agreement == "disagree_anchoring_risk":
+            risk_flags.add("manual_review_required")
+        elif blind_aware_agreement in ("disagree_damage_not_flagged", "disagree_different_damage"):
+            risk_flags.add("claim_mismatch")
+            risk_flags.add("manual_review_required")
 
         # Inherit history flags
         if "user_history_risk" in history_flags:
@@ -450,6 +506,47 @@ class DecisionEngine:
             evidence_standard_met = True
             evidence_standard_met_reason = f"The {claimed_part.replace('_', ' ')} is visible and can be inspected."
 
+        # Override evidence_standard_met if any matched requirement failed
+        requirements_met = audit_result.get("requirements_met", {})
+        
+        # Calibrate/override VLM's requirement assessments using decision-calibrated metrics
+        calibrated_requirements = {}
+        for req_id, val in requirements_met.items():
+            calibrated_val = val
+            if not val:
+                # If we determined the image is valid and the claimed part is visible,
+                # then general/specific visibility requirements are satisfied.
+                if req_id in ("REQ_GENERAL_OBJECT_PART", "REQ_GENERAL_MULTI_IMAGE", "REQ_REVIEW_TRUST"):
+                    if claimed_part_visible and not (has_quality_issue and not claimed_part_visible):
+                        calibrated_val = True
+                    if visual_damage_found or wrong_object_detected:
+                        calibrated_val = True
+                elif req_id in ("REQ_CAR_BODY_PANEL", "REQ_CAR_GLASS_LIGHT_MIRROR", "REQ_CAR_IDENTITY_OR_SIDE",
+                               "REQ_LAPTOP_SCREEN_KEYBOARD_TRACKPAD", "REQ_LAPTOP_BODY_HINGE_PORT",
+                               "REQ_PACKAGE_EXTERIOR", "REQ_PACKAGE_LABEL_OR_STAIN"):
+                    if claimed_part_visible or visual_damage_found or wrong_object_detected:
+                        calibrated_val = True
+                elif req_id == "REQ_PACKAGE_CONTENTS":
+                    if not (cropped_obstructed_detected or has_quality_issue):
+                        calibrated_val = True
+            calibrated_requirements[req_id] = calibrated_val
+
+        failed_requirements = []
+        if matched_reqs:
+            for req in matched_reqs:
+                req_id = req.get("requirement_id", "REQ_UNKNOWN")
+                if req_id in calibrated_requirements and not calibrated_requirements[req_id]:
+                    failed_requirements.append(req)
+
+        if failed_requirements:
+            evidence_standard_met = False
+            failed_desc = []
+            for req in failed_requirements:
+                req_id = req.get("requirement_id", "REQ_UNKNOWN")
+                min_ev = req.get("minimum_image_evidence", "")
+                failed_desc.append(f"{req_id}: {min_ev}")
+            evidence_standard_met_reason = "Minimum image evidence requirements were not met: " + "; ".join(failed_desc)
+
         # 4. Make Claim Decision and attribution
         claim_status = "not_enough_information"
         issue_type = "unknown"
@@ -543,6 +640,13 @@ class DecisionEngine:
                     else:
                         matched_image_ids.append("img_1")
 
+            # Reconcile visible damage type with blind audit if there's a disagreement
+            if blind_aware_agreement in ("disagree_damage_not_flagged", "disagree_different_damage"):
+                visible_damage_type = consensus_dmg
+                visible_sev = consensus_sev
+                visible_part = consensus_part if consensus_part != "unknown" else claimed_part
+                visual_damage_found = (visible_damage_type not in ("none", "unknown"))
+
             # Override damage to none if VLM detected a scratch/stain that is likely just the text instruction/annotation
             if "text_instruction_present" in risk_flags:
                 if visible_damage_type in ("scratch", "stain") and claimed_damage not in ("scratch", "stain"):
@@ -611,7 +715,7 @@ class DecisionEngine:
                     claim_status_justification = f"The image clearly shows a {dmg_str} on the {part_str}."
                     if "blurry_image" in risk_flags and len(images_audited) > 1:
                         claim_status_justification = f"The clearer image supports the claim by showing a {dmg_str} on the {part_str}."
-                elif claimed_damage != "unknown" and are_issues_similar(claimed_damage, visible_damage_type):
+                elif claimed_damage != "unknown" and are_issues_similar(claimed_damage, visible_damage_type, visible_sev):
                     # Similar types — supported
                     claim_status = "supported"
                     issue_type = calibrate_visual_issue(visible_damage_type, claimed_damage, claim_object)
@@ -708,6 +812,9 @@ class DecisionEngine:
             if just_clean.lower() not in claim_status_justification.lower():
                 claim_status_justification = f"{claim_status_justification} {just_clean}"
 
+        if blind_anchoring_note:
+            claim_status_justification = f"{claim_status_justification} {blind_anchoring_note}".strip()
+
         # Clean risk flags string
         risk_flags_list = sorted(list(risk_flags))
         if "none" in risk_flags_list and len(risk_flags_list) > 1:
@@ -726,5 +833,6 @@ class DecisionEngine:
             "claim_status_justification": claim_status_justification,
             "supporting_image_ids": supporting_image_ids,
             "valid_image": str(valid_image).lower(),
-            "severity": severity
+            "severity": severity,
+            "blind_aware_agreement": blind_aware_agreement
         }

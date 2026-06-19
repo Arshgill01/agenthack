@@ -12,7 +12,7 @@ class ImageAuditor:
     def __init__(self, client: ModelClient | None = None):
         self.client = client or ModelClient()
 
-    def audit_images(self, image_paths: list[str], claim_object: str, claimed_part: str, claimed_damage: str) -> dict[str, object]:
+    def audit_images(self, image_paths: list[str], claim_object: str, claimed_part: str, claimed_damage: str, matched_reqs: list[dict[str, str]] | None = None) -> dict[str, object]:
         # Extract Image IDs (filenames without extensions)
         resolved_paths = []
         image_id_map = {}
@@ -50,6 +50,21 @@ class ImageAuditor:
             object_note = " Note: 'laptop' refers to the laptop computer itself. Do NOT classify the laptop as 'other' or 'wrong_object' simply because it is a product or device."
         elif claim_object == "car":
             object_note = " Note: 'car' refers to the vehicle itself."
+
+        # Construct checklist instructions and schema
+        checklist_instruction = ""
+        checklist_schema = ""
+        if matched_reqs:
+            checklist_items = []
+            schema_items = []
+            for req in matched_reqs:
+                req_id = req.get("requirement_id", "REQ_UNKNOWN")
+                min_evidence = req.get("minimum_image_evidence", "")
+                checklist_items.append(f"- [{req_id}]: {min_evidence}")
+                schema_items.append(f'"{req_id}": true/false')
+            
+            checklist_instruction = "\nAdditionally, you MUST evaluate whether the submitted images satisfy the following specific minimum evidence requirements. Report true if the images are clear and inspectable enough to make a verification decision (even if the decision is to contradict the claim or flag fraud). Report false ONLY if the image quality is so poor, blurry, or missing context that it is impossible to inspect the part at all:\n" + "\n".join(checklist_items)
+            checklist_schema = ',\n  "requirements_met": {\n    ' + ",\n    ".join(schema_items) + '\n  }'
 
         prompt = f"""
 You are a forensic insurance claims inspector. Review the submitted images for a damage claim.
@@ -95,6 +110,7 @@ For each image, identify:
    - possible_manipulation (visual elements look photoshopped or edited)
 
 CRITICAL WARNING: If the image has any red/blue/black circles, arrows, lines, or drawing marks on it, these are annotations added by the user to point at something. They are NOT physical damage. You must ignore these drawings completely. If there is no other damage on the object, you must classify visible_damage as 'none' and severity as 'none'.
+{checklist_instruction}
 
 In addition to the per-image details, formulate an overall claim-level consensus across all submitted images:
 1. Determine the overall primary object, part, damage type, and severity across all images.
@@ -121,7 +137,7 @@ Respond ONLY with a JSON object. Do not wrap it in markdown block tags or text:
     "primary_severity": "none, low, medium, high, or unknown",
     "consensus_justification": "concise description of the overall visual evidence, highlighting key images",
     "supporting_image_ids": ["list of image IDs that directly show the claimed or visible damage, or empty if none"]
-  }}
+  }}{checklist_schema}
 }}
 """
         try:
@@ -182,10 +198,23 @@ Respond ONLY with a JSON object. Do not wrap it in markdown block tags or text:
                 "supporting_image_ids": supporting_ids
             }
 
+            # Parse evidence requirements satisfaction
+            requirements_met_raw = data.get("requirements_met", {})
+            requirements_met = {}
+            if matched_reqs:
+                for req in matched_reqs:
+                    req_id = req.get("requirement_id", "REQ_UNKNOWN")
+                    val = requirements_met_raw.get(req_id, True)
+                    if isinstance(val, str):
+                        requirements_met[req_id] = val.lower() in ("true", "yes", "1")
+                    else:
+                        requirements_met[req_id] = bool(val)
+
             return {
                 "valid_call": True,
                 "images": audited_images,
-                "consensus": consensus_cleaned
+                "consensus": consensus_cleaned,
+                "requirements_met": requirements_met
             }
 
         except Exception as e:
@@ -214,10 +243,17 @@ Respond ONLY with a JSON object. Do not wrap it in markdown block tags or text:
                 "consensus_justification": "Visual audit failed due to error.",
                 "supporting_image_ids": fallback_supporting_ids
             }
+            
+            fallback_reqs = {}
+            if matched_reqs:
+                for req in matched_reqs:
+                    fallback_reqs[req.get("requirement_id", "REQ_UNKNOWN")] = False
+
             return {
                 "valid_call": False,
                 "images": fallback_images,
-                "consensus": fallback_consensus
+                "consensus": fallback_consensus,
+                "requirements_met": fallback_reqs
             }
 
     def _clean_json_string(self, text: str) -> str:

@@ -118,6 +118,74 @@ def run_tests():
     assert_eq("Case 7 - issue_type", res["issue_type"], "none")
     assert_eq("Case 7 - severity", res["severity"], "none")
 
+    # Case 8: Blind-First Dual Audit - blind says no damage, aware says scratch
+    # Expected: manual_review_required flagged, claim status/issue type evaluates but risk flags include manual_review_required
+    claim_details = {"claimed_part": "door", "claimed_damage": "scratch", "stated_severity": "low"}
+    user_history = {"history_flags": "none", "history_summary": ""}
+    audit_result = {
+        "valid_call": True,
+        "images": [
+            {"image_id": "img_1", "detected_object": "car", "detected_part": "door", "visible_damage": "scratch", "severity": "low", "is_original_photo": True, "detected_risks": ["none"]}
+        ],
+        "consensus": {"primary_object": "car", "primary_part": "door", "primary_damage": "scratch", "primary_severity": "low", "consensus_justification": "Scratch visible.", "supporting_image_ids": ["img_1"]}
+    }
+    blind_result = {
+        "valid_call": True,
+        "images": [
+            {"image_id": "img_1", "detected_object": "car", "detected_part": "door", "visible_damage": "none", "severity": "none", "is_original_photo": True, "detected_risks": ["none"]}
+        ],
+        "consensus": {"primary_object": "car", "primary_part": "door", "primary_damage": "none", "primary_severity": "none", "consensus_justification": "No damage visible.", "supporting_image_ids": []}
+    }
+    res = engine.evaluate(claim_details, user_history, audit_result, "car", blind_result)
+    assert_eq("Case 8 - status", res["claim_status"], "supported")
+    assert_eq("Case 8 - manual review risk flag", "manual_review_required" in res["risk_flags"], True)
+
+    # Case 9: Blind-First Dual Audit - blind says dent, aware says dent
+    # Expected: agree, supported dent
+    claim_details = {"claimed_part": "door", "claimed_damage": "dent", "stated_severity": "medium"}
+    user_history = {"history_flags": "none", "history_summary": ""}
+    audit_result = {
+        "valid_call": True,
+        "images": [
+            {"image_id": "img_1", "detected_object": "car", "detected_part": "door", "visible_damage": "dent", "severity": "medium", "is_original_photo": True, "detected_risks": ["none"]}
+        ],
+        "consensus": {"primary_object": "car", "primary_part": "door", "primary_damage": "dent", "primary_severity": "medium", "consensus_justification": "Dent visible.", "supporting_image_ids": ["img_1"]}
+    }
+    blind_result = {
+        "valid_call": True,
+        "images": [
+            {"image_id": "img_1", "detected_object": "car", "detected_part": "door", "visible_damage": "dent", "severity": "medium", "is_original_photo": True, "detected_risks": ["none"]}
+        ],
+        "consensus": {"primary_object": "car", "primary_part": "door", "primary_damage": "dent", "primary_severity": "medium", "consensus_justification": "Dent visible.", "supporting_image_ids": ["img_1"]}
+    }
+    res = engine.evaluate(claim_details, user_history, audit_result, "car", blind_result)
+    assert_eq("Case 9 - status", res["claim_status"], "supported")
+    assert_eq("Case 9 - issue_type", res["issue_type"], "dent")
+    assert_eq("Case 9 - agreement", res["blind_aware_agreement"], "agree")
+
+    # Case 10: Blind-First Dual Audit - blind says scratch, aware says broken_part
+    # Expected: trust blind (scratch), contradicted (since claimed door broken_part but blind says scratch)
+    claim_details = {"claimed_part": "door", "claimed_damage": "broken_part", "stated_severity": "medium"}
+    user_history = {"history_flags": "none", "history_summary": ""}
+    audit_result = {
+        "valid_call": True,
+        "images": [
+            {"image_id": "img_1", "detected_object": "car", "detected_part": "door", "visible_damage": "broken_part", "severity": "medium", "is_original_photo": True, "detected_risks": ["none"]}
+        ],
+        "consensus": {"primary_object": "car", "primary_part": "door", "primary_damage": "broken_part", "primary_severity": "medium", "consensus_justification": "Broken part visible.", "supporting_image_ids": ["img_1"]}
+    }
+    blind_result = {
+        "valid_call": True,
+        "images": [
+            {"image_id": "img_1", "detected_object": "car", "detected_part": "door", "visible_damage": "scratch", "severity": "low", "is_original_photo": True, "detected_risks": ["none"]}
+        ],
+        "consensus": {"primary_object": "car", "primary_part": "door", "primary_damage": "scratch", "primary_severity": "low", "consensus_justification": "Scratch visible.", "supporting_image_ids": ["img_1"]}
+    }
+    res = engine.evaluate(claim_details, user_history, audit_result, "car", blind_result)
+    assert_eq("Case 10 - status", res["claim_status"], "contradicted")
+    assert_eq("Case 10 - issue_type", res["issue_type"], "scratch")
+    assert_eq("Case 10 - agreement", res["blind_aware_agreement"], "disagree_different_damage")
+
     if failures:
         print("FAILURES DETECTED:")
         for f in failures:
@@ -126,6 +194,7 @@ def run_tests():
     else:
         print("ALL ANTI-OVERFIT CHECKS PASSED SUCCESSFULLY.")
         sys.exit(0)
+
 
 if __name__ == "__main__":
     run_tests()
