@@ -17,6 +17,68 @@ class ClaimExtractor:
         allowed_damages = sorted(list(ALLOWED_ISSUE_TYPES))
         allowed_severities = sorted(list(ALLOWED_SEVERITIES))
 
+        examples = ""
+        if claim_object == "car":
+            examples = """
+Example 1:
+Dialogue: "I backed into a pole and the back of the car has a massive indentation. It's really deep."
+JSON Response:
+{
+  "claimed_part": "rear_bumper",
+  "claimed_damage": "dent",
+  "stated_severity": "high"
+}
+
+Example 2:
+Dialogue: "There is a minor surface scrape on the driver's door panel from the parking lot."
+JSON Response:
+{
+  "claimed_part": "door",
+  "claimed_damage": "scratch",
+  "stated_severity": "low"
+}
+"""
+        elif claim_object == "laptop":
+            examples = """
+Example 1:
+Dialogue: "I dropped my coffee all over the keys this morning and now it won't type anything."
+JSON Response:
+{
+  "claimed_part": "keyboard",
+  "claimed_damage": "water_damage",
+  "stated_severity": "high"
+}
+
+Example 2:
+Dialogue: "The screen glass has a hairline fracture running down the middle but the display still turns on."
+JSON Response:
+{
+  "claimed_part": "screen",
+  "claimed_damage": "crack",
+  "stated_severity": "medium"
+}
+"""
+        elif claim_object == "package":
+            examples = """
+Example 1:
+Dialogue: "The shipping box arrived squished at the bottom corner and the tape on the side was torn."
+JSON Response:
+{
+  "claimed_part": "box",
+  "claimed_damage": "crushed_packaging",
+  "stated_severity": "medium"
+}
+
+Example 2:
+Dialogue: "I opened the envelope and the actual product inside is completely broken."
+JSON Response:
+{
+  "claimed_part": "contents",
+  "claimed_damage": "broken_part",
+  "stated_severity": "high"
+}
+"""
+
         prompt = f"""
 You are an expert claims processor. Analyze this conversation transcript between a customer and a support agent to identify:
 1. The specific part of the {claim_object} they claim is damaged.
@@ -28,6 +90,10 @@ Allowed Parts for this object: {allowed_parts}
 Allowed Damage Types: {allowed_damages}
 Allowed Severities: {allowed_severities}
 
+Generic Taxonomy Examples:
+{examples}
+
+Now evaluate the following conversation transcript.
 Conversation Transcript:
 "{user_claim}"
 

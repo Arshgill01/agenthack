@@ -96,6 +96,11 @@ For each image, identify:
 
 CRITICAL WARNING: If the image has any red/blue/black circles, arrows, lines, or drawing marks on it, these are annotations added by the user to point at something. They are NOT physical damage. You must ignore these drawings completely. If there is no other damage on the object, you must classify visible_damage as 'none' and severity as 'none'.
 
+In addition to the per-image details, formulate an overall claim-level consensus across all submitted images:
+1. Determine the overall primary object, part, damage type, and severity across all images.
+2. Write a consensus justification based strictly on the images.
+3. Identify the specific supporting image IDs (e.g., ["img_1"]) that directly show this damage.
+
 Respond ONLY with a JSON object. Do not wrap it in markdown block tags or text:
 {{
   "images": [
@@ -108,7 +113,15 @@ Respond ONLY with a JSON object. Do not wrap it in markdown block tags or text:
       "is_original_photo": true,
       "detected_risks": ["list of risks found, or none"]
     }}
-  ]
+  ],
+  "consensus": {{
+    "primary_object": "car, laptop, package, other, or unknown",
+    "primary_part": "one of the allowed parts, or unknown",
+    "primary_damage": "one of the allowed damage types, or unknown",
+    "primary_severity": "none, low, medium, high, or unknown",
+    "consensus_justification": "concise description of the overall visual evidence, highlighting key images",
+    "supporting_image_ids": ["list of image IDs that directly show the claimed or visible damage, or empty if none"]
+  }}
 }}
 """
         try:
@@ -145,18 +158,45 @@ Respond ONLY with a JSON object. Do not wrap it in markdown block tags or text:
                     "detected_risks": risks
                 })
 
+            consensus_data = data.get("consensus", {})
+            primary_obj = str(consensus_data.get("primary_object", "unknown")).lower().strip()
+            primary_pt = str(consensus_data.get("primary_part", "unknown")).lower().strip()
+            primary_dmg = str(consensus_data.get("primary_damage", "unknown")).lower().strip()
+            primary_sev = str(consensus_data.get("primary_severity", "unknown")).lower().strip()
+            consensus_just = str(consensus_data.get("consensus_justification", ""))
+            supporting_ids = [str(i).strip() for i in consensus_data.get("supporting_image_ids", [])]
+
+            if primary_pt not in allowed_parts:
+                primary_pt = "unknown"
+            if primary_dmg not in ALLOWED_ISSUE_TYPES:
+                primary_dmg = "unknown"
+            if primary_sev not in ALLOWED_SEVERITIES:
+                primary_sev = "unknown"
+
+            consensus_cleaned = {
+                "primary_object": primary_obj,
+                "primary_part": primary_pt,
+                "primary_damage": primary_dmg,
+                "primary_severity": primary_sev,
+                "consensus_justification": consensus_just,
+                "supporting_image_ids": supporting_ids
+            }
+
             return {
                 "valid_call": True,
-                "images": audited_images
+                "images": audited_images,
+                "consensus": consensus_cleaned
             }
 
         except Exception as e:
             logger.error(f"VLM auditing failed: {e}")
             # Return a default fallback indicating visual audit failed (will trigger manual review)
             fallback_images = []
+            fallback_supporting_ids = []
             for path in resolved_paths:
+                img_id = image_id_map.get(path, Path(path).stem)
                 fallback_images.append({
-                    "image_id": image_id_map.get(path, Path(path).stem),
+                    "image_id": img_id,
                     "detected_object": claim_object,
                     "detected_part": claimed_part,
                     "visible_damage": "unknown",
@@ -164,9 +204,20 @@ Respond ONLY with a JSON object. Do not wrap it in markdown block tags or text:
                     "is_original_photo": True,
                     "detected_risks": ["manual_review_required"]
                 })
+                fallback_supporting_ids.append(img_id)
+            
+            fallback_consensus = {
+                "primary_object": claim_object,
+                "primary_part": claimed_part,
+                "primary_damage": "unknown",
+                "primary_severity": "unknown",
+                "consensus_justification": "Visual audit failed due to error.",
+                "supporting_image_ids": fallback_supporting_ids
+            }
             return {
                 "valid_call": False,
-                "images": fallback_images
+                "images": fallback_images,
+                "consensus": fallback_consensus
             }
 
     def _clean_json_string(self, text: str) -> str:
