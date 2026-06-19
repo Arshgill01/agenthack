@@ -3,10 +3,10 @@
 ## Metrics on `dataset/sample_claims.csv`
 
 - **Total Claims Evaluated:** 20
-- **Claim Status Accuracy:** 100.00%
-- **Object Part Accuracy:** 100.00%
-- **Issue Type Accuracy:** 100.00%
-- **Severity Accuracy:** 100.00%
+- **Claim Status Accuracy:** 90.00%
+- **Object Part Accuracy:** 90.00%
+- **Issue Type Accuracy:** 85.00%
+- **Severity Accuracy:** 90.00%
 - **Evidence Standard Met Accuracy:** 100.00%
 - **Valid Image Accuracy:** 100.00%
 
