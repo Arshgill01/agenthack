@@ -62,3 +62,8 @@ OUTPUT_COLUMNS = [
     "valid_image",
     "severity"
 ]
+
+# Self-Correction & Reconciliation Configuration
+ENABLE_SELF_CORRECTION = True
+SHADOW_MODE_RECONCILIATION = False
+CONFIDENCE_THRESHOLD = 0.7

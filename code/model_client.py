@@ -15,8 +15,8 @@ logger = logging.getLogger("model_client")
 class ModelClient:
     def __init__(self, cache_enabled: bool = True):
         self.cache = ResponseCache() if cache_enabled else None
-        self.text_model = os.environ.get("TEXT_MODEL", "gemini-1.5-flash")
-        self.vlm_model = os.environ.get("VLM_MODEL", "gemini-1.5-flash")
+        self.text_model = os.environ.get("TEXT_MODEL", "gemini-3.5-flash")
+        self.vlm_model = os.environ.get("VLM_MODEL", "gemini-3.5-flash")
         # Setup Gemini
         self.has_gemini = False
         gemini_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -29,10 +29,91 @@ class ModelClient:
             except ImportError:
                 logger.warning("google-generativeai package not installed, will use requests for Gemini if needed.")
         
+        # Setup unified google-genai client (supports API keys and Vertex AI ADC credentials)
+        self.genai_client = None
+        self.use_vertex = False
+        
+        # Try to resolve GCP Project ID for Vertex AI
+        gcp_project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GOOGLE_PROJECT")
+        
+        # 1. Try config_default INI
+        if not gcp_project:
+            gcloud_config_path = Path.home() / ".config" / "gcloud" / "configurations" / "config_default"
+            if gcloud_config_path.exists():
+                try:
+                    import configparser
+                    config = configparser.ConfigParser()
+                    config.read(gcloud_config_path)
+                    if "core" in config and "project" in config["core"]:
+                        gcp_project = config["core"]["project"]
+                except Exception:
+                    pass
+
+        # 2. Try ADC JSON file
+        if not gcp_project:
+            adc_path = Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
+            if adc_path.exists():
+                try:
+                    with open(adc_path) as f:
+                        adc_data = json.load(f)
+                        gcp_project = adc_data.get("quota_project_id") or adc_data.get("project_id")
+                except Exception:
+                    pass
+
+        # 3. Try subprocess fallback to gcloud
+        if not gcp_project:
+            try:
+                import subprocess
+                for gcloud_cmd in ["gcloud", str(Path.home() / "google-cloud-sdk" / "bin" / "gcloud")]:
+                    try:
+                        res = subprocess.run(
+                            [gcloud_cmd, "config", "get-value", "project"],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        if res.returncode == 0 and res.stdout.strip():
+                            gcp_project = res.stdout.strip()
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+        try:
+            from google import genai
+            adc_path = Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
+            has_adc = adc_path.exists() or bool(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
+            
+            if has_adc:
+                self.genai_client = genai.Client(
+                    vertexai=True,
+                    project=gcp_project,
+                    location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global")
+                )
+                self.use_vertex = True
+                logger.info(f"google-genai Client initialized using Vertex AI (project={gcp_project}).")
+            elif gemini_key:
+                self.genai_client = genai.Client(api_key=gemini_key)
+                logger.info("google-genai Client initialized using API key.")
+        except Exception as e:
+            logger.warning(f"Could not initialize google-genai Client: {e}")
+
         # Setup Keys
         self.openai_key = os.environ.get("OPENAI_API_KEY")
         self.anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
         self.gemini_key = gemini_key
+
+        # Token usage tracking
+        self.usage_stats = {
+            "vlm_input_tokens": 0,
+            "vlm_output_tokens": 0,
+            "vlm_calls": 0,
+            "text_input_tokens": 0,
+            "text_output_tokens": 0,
+            "text_calls": 0
+        }
+
+    def get_usage_stats(self) -> dict[str, int]:
+        return self.usage_stats
 
     def _is_rate_limit(self, e: Exception) -> bool:
         err_str = str(e).lower()
@@ -66,14 +147,35 @@ class ModelClient:
         if self.cache:
             cached = self.cache.get(full_prompt)
             if cached is not None:
+                try:
+                    data = json.loads(cached)
+                    if isinstance(data, dict) and "response_text" in data:
+                        self.usage_stats["text_input_tokens"] += data.get("prompt_tokens", 0)
+                        self.usage_stats["text_output_tokens"] += data.get("completion_tokens", 0)
+                        self.usage_stats["text_calls"] += 1
+                        logger.info("Text response (with stats) retrieved from cache.")
+                        return data["response_text"]
+                except Exception:
+                    pass
                 logger.info("Text response retrieved from cache.")
                 return cached
 
+        in_before = self.usage_stats["text_input_tokens"]
+        out_before = self.usage_stats["text_output_tokens"]
+
         response = self._execute_with_retry(self._invoke_text_api, prompt, system_instruction)
         
+        in_diff = self.usage_stats["text_input_tokens"] - in_before
+        out_diff = self.usage_stats["text_output_tokens"] - out_before
+
         # Save to Cache
         if self.cache and response:
-            self.cache.set(full_prompt, response)
+            cache_val = json.dumps({
+                "response_text": response,
+                "prompt_tokens": in_diff,
+                "completion_tokens": out_diff
+            })
+            self.cache.set(full_prompt, cache_val)
         return response
 
     def call_vlm_model(self, prompt: str, image_paths: list[str]) -> str:
@@ -81,18 +183,62 @@ class ModelClient:
         if self.cache:
             cached = self.cache.get(prompt, image_paths)
             if cached is not None:
+                try:
+                    data = json.loads(cached)
+                    if isinstance(data, dict) and "response_text" in data:
+                        self.usage_stats["vlm_input_tokens"] += data.get("prompt_tokens", 0)
+                        self.usage_stats["vlm_output_tokens"] += data.get("completion_tokens", 0)
+                        self.usage_stats["vlm_calls"] += 1
+                        logger.info("VLM response (with stats) retrieved from cache.")
+                        return data["response_text"]
+                except Exception:
+                    pass
                 logger.info("VLM response retrieved from cache.")
                 return cached
 
+        in_before = self.usage_stats["vlm_input_tokens"]
+        out_before = self.usage_stats["vlm_output_tokens"]
+
         response = self._execute_with_retry(self._invoke_vlm_api, prompt, image_paths)
         
+        in_diff = self.usage_stats["vlm_input_tokens"] - in_before
+        out_diff = self.usage_stats["vlm_output_tokens"] - out_before
+
         # Save to Cache
         if self.cache and response:
-            self.cache.set(prompt, response, image_paths)
+            cache_val = json.dumps({
+                "response_text": response,
+                "prompt_tokens": in_diff,
+                "completion_tokens": out_diff
+            })
+            self.cache.set(prompt, cache_val, image_paths)
         return response
 
 
     def _invoke_text_api(self, prompt: str, system_instruction: str) -> str:
+        # Attempt via unified google-genai Client (API key or Vertex AI)
+        if self.genai_client:
+            try:
+                config = {}
+                if system_instruction:
+                    config["system_instruction"] = system_instruction
+                
+                res = self.genai_client.models.generate_content(
+                    model=self.text_model,
+                    contents=prompt,
+                    config=config
+                )
+                if hasattr(res, "usage_metadata") and res.usage_metadata:
+                    self.usage_stats["text_input_tokens"] += getattr(res.usage_metadata, "prompt_token_count", 0)
+                    self.usage_stats["text_output_tokens"] += getattr(res.usage_metadata, "candidates_token_count", 0) or getattr(res.usage_metadata, "response_token_count", 0)
+                self.usage_stats["text_calls"] += 1
+                if res.text:
+                    return res.text.strip()
+            except Exception as e:
+                if self._is_rate_limit(e):
+                    raise e
+                logger.error(f"google-genai Client text generate failed: {e}")
+
         # Attempt Gemini via package
         if self.has_gemini:
             try:
@@ -202,6 +348,25 @@ class ModelClient:
 
         if not pil_images:
             raise RuntimeError(f"No valid images could be opened from paths: {image_paths}")
+
+        # Attempt via unified google-genai Client (API key or Vertex AI)
+        if self.genai_client:
+            try:
+                contents = [img for img, _ in pil_images] + [prompt]
+                res = self.genai_client.models.generate_content(
+                    model=self.vlm_model,
+                    contents=contents
+                )
+                if hasattr(res, "usage_metadata") and res.usage_metadata:
+                    self.usage_stats["vlm_input_tokens"] += getattr(res.usage_metadata, "prompt_token_count", 0)
+                    self.usage_stats["vlm_output_tokens"] += getattr(res.usage_metadata, "candidates_token_count", 0) or getattr(res.usage_metadata, "response_token_count", 0)
+                self.usage_stats["vlm_calls"] += 1
+                if res.text:
+                    return res.text.strip()
+            except Exception as e:
+                if self._is_rate_limit(e):
+                    raise e
+                logger.error(f"google-genai Client VLM generate failed: {e}")
 
         # Attempt Gemini via package
         if self.has_gemini:

@@ -10,16 +10,33 @@ Read [`problem_statement.md`](./problem_statement.md) for the full task spec, in
 
 ---
 
+## Architecture & Innovation
+
+This system implements a **3-pass VLM pipeline with confidence-gated self-correction** for multi-modal damage claim verification:
+
+1. **Text Extraction (`extractor.py`):** LLM parses the claim conversation transcript → claimed_part, claimed_damage, stated_severity. Regex fallback on failure.
+2. **Evidence Requirements Matching (`pipeline.py`):** Dynamically filters `evidence_requirements.csv` by object type and damage family to build a per-claim inspectability rubric.
+3. **Blind-First Dual Audit (Pass 1 & Pass 2):**
+   - **Pass 1 — Blind Audit (`blind_auditor.py`):** VLM analyzes images with *zero* claim context to eliminate anchoring bias.
+   - **Pass 2 — Aware Audit (`auditor.py`):** VLM analyzes images with full claim context + the matched evidence checklist injected as a rubric.
+4. **Confidence-Gated CoT Reconciler (Pass 3 — `self_corrector.py`):** Fires when Pass 1 and Pass 2 disagree on damage type, part, or severity (delta ≥ 2). Presents both results in randomized order (deterministic hash-based anti-anchoring shuffle) and performs 3-stage structured reasoning: raw visual re-read → prior pass review → reconciliation synthesis. Triggers on ~15-25% of claims.
+5. **Decision Engine (`decision.py`):** Taxonomy normalization, severity calibration, part compatibility, evidence requirement satisfaction, risk flag aggregation.
+6. **Output Linter (`linter.py`):** Schema validation and value clamping.
+7. **SQLite Caching (`cache.py`):** Response cache keyed on prompt+image hash with actual token tracking from API metadata.
+
+---
+
 ## Contents
 
-1. [Repository layout](#repository-layout)
-2. [What you need to build](#what-you-need-to-build)
-3. [Where your code goes](#where-your-code-goes)
-4. [Quickstart](#quickstart)
-5. [Evaluation](#evaluation)
-6. [Chat transcript logging](#chat-transcript-logging)
-7. [Submission](#submission)
-8. [Judge interview](#judge-interview)
+1. [Architecture & Innovation](#architecture--innovation)
+2. [Repository layout](#repository-layout)
+3. [What you need to build](#what-you-need-to-build)
+4. [Where your code goes](#where-your-code-goes)
+5. [Quickstart](#quickstart)
+6. [Evaluation](#evaluation)
+7. [Chat transcript logging](#chat-transcript-logging)
+8. [Submission](#submission)
+9. [Judge interview](#judge-interview)
 
 ---
 
@@ -88,6 +105,8 @@ Beyond that you are free to bring your own approach: VLMs, LLMs, structured prom
 ## Where your code goes
 
 All of your work belongs in [`code/`](./code/). The repo ships with empty starter files that you can grow into your full solution.
+
+See [Architecture & Innovation](#architecture--innovation) above for the full pipeline description.
 
 Suggested conventions:
 

@@ -2,12 +2,14 @@ from __future__ import annotations
 import csv
 import logging
 from pathlib import Path
-from config import DATA_DIR
+from config import DATA_DIR, ENABLE_SELF_CORRECTION, CONFIDENCE_THRESHOLD, SHADOW_MODE_RECONCILIATION
 from model_client import ModelClient
 from extractor import ClaimExtractor
 from auditor import ImageAuditor
+from blind_auditor import BlindImageAuditor
 from decision import DecisionEngine
 from linter import OutputLinter
+from self_corrector import SelfCorrector
 
 logger = logging.getLogger("pipeline")
 
@@ -16,8 +18,11 @@ class ClaimReviewPipeline:
         self.client = client or ModelClient()
         self.extractor = ClaimExtractor(self.client)
         self.auditor = ImageAuditor(self.client)
+        self.blind_auditor = BlindImageAuditor(self.client)
+        self.self_corrector = SelfCorrector(self.client)
         self.decision_engine = DecisionEngine()
         self.linter = OutputLinter()
+        self.last_run_extra = {}
         
         # Load datasets
         self.user_history_map = {}
@@ -53,6 +58,49 @@ class ClaimReviewPipeline:
         except Exception as e:
             logger.error(f"Error loading evidence_requirements.csv: {e}")
 
+    def _match_evidence_requirements(self, claim_object: str, claimed_part: str, claimed_damage: str, num_images: int) -> list[dict[str, str]]:
+        matched = []
+        for req in self.evidence_reqs:
+            req_obj = req.get("claim_object", "").strip().lower()
+            applies_to = req.get("applies_to", "").strip().lower()
+            
+            # Check claim_object compatibility
+            if req_obj != "all" and req_obj != claim_object:
+                continue
+                
+            # Check applies_to condition
+            is_match = False
+            if req_obj == "all":
+                if applies_to == "general claim review":
+                    is_match = True
+                elif applies_to == "multi-image rows" and num_images > 1:
+                    is_match = True
+                elif applies_to == "reviewability":
+                    is_match = True
+            elif claim_object == "car":
+                if applies_to == "dent or scratch" and claimed_damage in ("dent", "scratch"):
+                    is_match = True
+                elif applies_to == "crack, broken, or missing part" and claimed_damage in ("crack", "broken_part", "missing_part", "glass_shatter"):
+                    is_match = True
+                elif applies_to == "vehicle identity or orientation":
+                    is_match = True
+            elif claim_object == "laptop":
+                if applies_to == "screen, keyboard, or trackpad" and claimed_part in ("screen", "keyboard", "trackpad"):
+                    is_match = True
+                elif applies_to == "hinge, lid, corner, body, or port" and claimed_part in ("hinge", "lid", "corner", "body", "base", "port"):
+                    is_match = True
+            elif claim_object == "package":
+                if applies_to == "crushed, torn, or seal damage" and claimed_damage in ("crushed_packaging", "torn_packaging", "broken_part", "missing_part"):
+                    is_match = True
+                elif applies_to == "water, stain, or label damage" and (claimed_damage in ("water_damage", "stain") or claimed_part == "label"):
+                    is_match = True
+                elif applies_to == "contents or inner item" and claimed_part in ("contents", "item"):
+                    is_match = True
+                    
+            if is_match:
+                matched.append(req)
+        return matched
+
     def process_row(self, row: dict[str, str]) -> dict[str, str]:
         user_id = row.get("user_id", "").strip()
         image_paths_raw = row.get("image_paths", "").strip()
@@ -74,20 +122,72 @@ class ClaimReviewPipeline:
             claim_details = self.extractor.extract(user_claim, claim_object)
             logger.info(f"Row user={user_id} object={claim_object} | Extracted claimed_part={claim_details['claimed_part']} damage={claim_details['claimed_damage']}")
 
+            # Match evidence requirements
+            matched_reqs = self._match_evidence_requirements(
+                claim_object=claim_object,
+                claimed_part=claim_details["claimed_part"],
+                claimed_damage=claim_details["claimed_damage"],
+                num_images=len(image_paths)
+            )
+
             # 2. Image auditing
+            blind_result = self.blind_auditor.audit(image_paths=image_paths)
             audit_result = self.auditor.audit_images(
                 image_paths=image_paths,
                 claim_object=claim_object,
                 claimed_part=claim_details["claimed_part"],
-                claimed_damage=claim_details["claimed_damage"]
+                claimed_damage=claim_details["claimed_damage"],
+                matched_reqs=matched_reqs
             )
+
+            # Gated Reconciliation
+            reconciled_result = None
+            if ENABLE_SELF_CORRECTION:
+                blind_consensus = blind_result.get("consensus", {})
+                blind_dmg = blind_consensus.get("primary_damage", "unknown")
+                blind_pt = blind_consensus.get("primary_part", "unknown")
+                blind_conf = blind_consensus.get("confidence", 0.8)
+
+                aware_consensus = audit_result.get("consensus", {})
+                aware_dmg = aware_consensus.get("primary_damage", "unknown")
+                aware_pt = aware_consensus.get("primary_part", "unknown")
+                aware_conf = aware_consensus.get("confidence", 0.8)
+
+                sev_map = {"none": 0, "low": 1, "medium": 2, "high": 3, "unknown": 0}
+                blind_sev_score = sev_map.get(blind_consensus.get("primary_severity", "unknown"), 0)
+                aware_sev_score = sev_map.get(aware_consensus.get("primary_severity", "unknown"), 0)
+                sev_delta = abs(blind_sev_score - aware_sev_score)
+
+                disagreement = (blind_dmg != aware_dmg) or (blind_pt != aware_pt) or (sev_delta >= 2)
+                low_confidence = (blind_conf < CONFIDENCE_THRESHOLD) or (aware_conf < CONFIDENCE_THRESHOLD)
+                
+                # Only trigger self-correction on actual pass disagreements or low confidence.
+                if disagreement or low_confidence:
+                    logger.info(f"Reconciliation trigger met: disagreement={disagreement}, low_confidence={low_confidence}. Running Pass 3 reconciler VLM...")
+                    claim_details["user_id"] = user_id
+                    rec_res = self.self_corrector.reconcile(
+                        image_paths=image_paths,
+                        claim_object=claim_object,
+                        claim_details=claim_details,
+                        blind_result=blind_result,
+                        aware_result=audit_result,
+                        matched_reqs=matched_reqs
+                    )
+                    
+                    if not SHADOW_MODE_RECONCILIATION:
+                        reconciled_result = rec_res
+                    else:
+                        logger.info(f"Shadow mode active. Reconciler returned: resolved_dmg={rec_res.get('resolved_damage')}, resolved_part={rec_res.get('resolved_part')}")
 
             # 3. Decision making
             decision = self.decision_engine.evaluate(
                 claim_details=claim_details,
                 user_history=user_hist,
                 audit_result=audit_result,
-                claim_object=claim_object
+                claim_object=claim_object,
+                blind_result=blind_result,
+                matched_reqs=matched_reqs,
+                reconciled_result=reconciled_result
             )
 
             # 4. Strict Linting & Formatting
@@ -97,6 +197,9 @@ class ClaimReviewPipeline:
             decision["claim_object"] = claim_object
             
             linted_row = self.linter.lint_row(decision, claim_object)
+            self.last_run_extra = {
+                "blind_aware_agreement": decision.get("blind_aware_agreement", "unknown")
+            }
             return linted_row
 
         except Exception as e:
@@ -117,5 +220,8 @@ class ClaimReviewPipeline:
                 "supporting_image_ids": "none",
                 "valid_image": "false",
                 "severity": "unknown"
+            }
+            self.last_run_extra = {
+                "blind_aware_agreement": "unknown"
             }
             return self.linter.lint_row(fallback, claim_object)
