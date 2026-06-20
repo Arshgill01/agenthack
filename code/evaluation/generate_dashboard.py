@@ -778,11 +778,11 @@ def generate_html():
                         </div>
                     `;
                     container.innerHTML += rowHtml;
-                }
-            });
+                }}
+            }});
 
             document.getElementById('visible-count').innerText = count;
-        }
+        }}
 
         function toggleDrawer(index) {{
             const drawer = document.getElementById('drawer-' + index);
