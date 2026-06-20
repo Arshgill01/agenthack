@@ -45,24 +45,22 @@ def generate_html():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EGDCA Claims Audit Dashboard</title>
+    <title>EGDCA Claims Audit Dashboard - Japanese Retro Edition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {{
-            --bg-dark: #0b0f19;
-            --card-bg: rgba(17, 24, 39, 0.7);
-            --card-border: rgba(31, 41, 55, 0.6);
-            --text-primary: #f3f4f6;
-            --text-secondary: #9ca3af;
-            --accent-teal: #0d9488;
-            --accent-teal-glow: rgba(13, 148, 136, 0.25);
-            --accent-amber: #d97706;
-            --accent-amber-glow: rgba(217, 119, 6, 0.25);
-            --accent-coral: #e11d48;
-            --accent-coral-glow: rgba(225, 29, 72, 0.25);
-            --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --bg-paper: #f5f2eb;
+            --bg-grid: #e2ded5;
+            --ink-dark: #1d2436;
+            --ink-muted: #5e6b84;
+            --stamp-red: #c83838;
+            --stamp-red-glow: rgba(200, 56, 56, 0.15);
+            --retro-green: #3b6046;
+            --retro-mustard: #b58d22;
+            --border-solid: 2px solid #1d2436;
+            --border-thin: 1px solid #1d2436;
         }}
 
         * {{
@@ -72,16 +70,16 @@ def generate_html():
         }}
 
         body {{
-            background-color: var(--bg-dark);
-            color: var(--text-primary);
+            background-color: var(--bg-paper);
+            color: var(--ink-dark);
             font-family: 'Inter', sans-serif;
             background-image: 
-                radial-gradient(at 0% 0%, rgba(13, 148, 136, 0.08) 0px, transparent 50%),
-                radial-gradient(at 100% 0%, rgba(225, 29, 72, 0.05) 0px, transparent 50%);
+                radial-gradient(var(--bg-grid) 1.5px, transparent 1.5px);
+            background-size: 24px 24px;
             background-attachment: fixed;
             min-height: 100vh;
-            padding: 2rem;
-            line-height: 1.5;
+            padding: 2.5rem;
+            line-height: 1.6;
         }}
 
         header {{
@@ -90,56 +88,46 @@ def generate_html():
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid var(--card-border);
+            border-bottom: var(--border-solid);
             padding-bottom: 1.5rem;
         }}
 
         h1, h2, h3 {{
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Playfair Display', serif;
+            font-weight: 900;
         }}
 
         .brand-title {{
-            font-size: 2.2rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #0d9488, #2dd4bf, #f43f5e);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -0.05em;
+            font-size: 2.4rem;
+            letter-spacing: -0.02em;
+            color: var(--ink-dark);
+            position: relative;
         }}
 
         .subtitle {{
-            color: var(--text-secondary);
+            color: var(--ink-muted);
             font-size: 0.95rem;
             margin-top: 0.25rem;
+            font-family: 'Space Mono', monospace;
+            text-transform: uppercase;
         }}
 
-        .status-badge-header {{
-            background: rgba(13, 148, 136, 0.1);
-            border: 1px solid var(--accent-teal);
-            color: #2dd4bf;
-            padding: 0.5rem 1rem;
-            border-radius: 9999px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            box-shadow: 0 0 15px var(--accent-teal-glow);
-        }}
-
-        .pulse-dot {{
-            width: 8px;
-            height: 8px;
-            background-color: #2dd4bf;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }}
-
-        @keyframes pulse {{
-            0% {{ transform: scale(0.95); box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.7); }}
-            70% {{ transform: scale(1); box-shadow: 0 0 0 10px rgba(45, 212, 191, 0); }}
-            100% {{ transform: scale(0.95); box-shadow: 0 0 0 0 rgba(45, 212, 191, 0); }}
+        .hanko-stamp {{
+            border: 3px double var(--stamp-red);
+            color: var(--stamp-red);
+            padding: 0.5rem 0.75rem;
+            font-family: 'Playfair Display', serif;
+            font-weight: 900;
+            font-size: 1.3rem;
+            letter-spacing: 0.1em;
+            line-height: 1.1;
+            text-align: center;
+            border-radius: 4px;
+            transform: rotate(-6deg);
+            display: inline-block;
+            background-color: transparent;
+            user-select: none;
+            box-shadow: 2px 2px 0px var(--stamp-red-glow);
         }}
 
         .dashboard-container {{
@@ -147,72 +135,57 @@ def generate_html():
             margin: 0 auto;
             display: grid;
             grid-template-columns: 1fr;
-            gap: 2rem;
+            gap: 2.5rem;
         }}
 
         /* Key Stats Grid */
         .stats-grid {{
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-            gap: 1.25rem;
+            gap: 1.5rem;
         }}
 
         .stat-card {{
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 16px;
+            background: #ffffff;
+            border: var(--border-solid);
             padding: 1.5rem;
-            box-shadow: var(--card-shadow);
-            backdrop-filter: blur(12px);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s;
+            box-shadow: 4px 4px 0px var(--ink-dark);
+            transition: transform 0.2s, box-shadow 0.2s;
             position: relative;
-            overflow: hidden;
         }}
 
         .stat-card:hover {{
-            transform: translateY(-4px);
-            border-color: rgba(13, 148, 136, 0.4);
-        }}
-
-        .stat-card.coral::before {{ background: var(--accent-coral); }}
-        .stat-card.amber::before {{ background: var(--accent-amber); }}
-
-        .stat-card::before {{
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 100%;
-            background: var(--accent-teal);
+            transform: translate(-2px, -2px);
+            box-shadow: 6px 6px 0px var(--ink-dark);
         }}
 
         .stat-label {{
             font-size: 0.8rem;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--text-secondary);
-            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--ink-muted);
+            font-weight: 700;
+            font-family: 'Space Mono', monospace;
         }}
 
         .stat-value {{
-            font-size: 2.2rem;
-            font-weight: 700;
-            font-family: 'Outfit', sans-serif;
+            font-size: 2.4rem;
+            font-weight: 900;
+            font-family: 'Space Mono', monospace;
             margin: 0.5rem 0;
-            color: var(--text-primary);
+            color: var(--ink-dark);
         }}
 
         .stat-details {{
             font-size: 0.75rem;
-            color: var(--text-secondary);
+            color: var(--ink-muted);
         }}
 
         /* Mid-Section: Breakdown and System Health */
         .mid-grid {{
             display: grid;
             grid-template-columns: 2fr 1fr;
-            gap: 2rem;
+            gap: 2.5rem;
         }}
 
         @media (max-width: 1024px) {{
@@ -222,18 +195,16 @@ def generate_html():
         }}
 
         .section-card {{
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            border-radius: 20px;
+            background: #ffffff;
+            border: var(--border-solid);
             padding: 2rem;
-            box-shadow: var(--card-shadow);
-            backdrop-filter: blur(12px);
+            box-shadow: 5px 5px 0px var(--ink-dark);
         }}
 
         .section-title {{
-            font-size: 1.4rem;
+            font-size: 1.5rem;
             margin-bottom: 1.5rem;
-            border-bottom: 1px solid var(--card-border);
+            border-bottom: var(--border-solid);
             padding-bottom: 0.75rem;
             display: flex;
             align-items: center;
@@ -250,30 +221,33 @@ def generate_html():
 
         th, td {{
             padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--card-border);
+            border-bottom: var(--border-thin);
             font-size: 0.9rem;
         }}
 
         th {{
-            color: var(--text-secondary);
-            font-weight: 600;
+            color: var(--ink-muted);
+            font-weight: 700;
             text-transform: uppercase;
             font-size: 0.75rem;
             letter-spacing: 0.05em;
+            font-family: 'Space Mono', monospace;
         }}
 
         .badge {{
             display: inline-block;
-            padding: 0.25rem 0.5rem;
-            border-radius: 6px;
+            padding: 0.35rem 0.75rem;
+            border: var(--border-solid);
+            border-radius: 4px;
             font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: capitalize;
+            font-weight: 700;
+            font-family: 'Space Mono', monospace;
+            text-transform: uppercase;
         }}
 
-        .badge-success {{ background: rgba(13, 148, 136, 0.15); border: 1px solid #14b8a6; color: #2dd4bf; }}
-        .badge-warning {{ background: rgba(217, 119, 6, 0.15); border: 1px solid #f59e0b; color: #fbbf24; }}
-        .badge-danger {{ background: rgba(225, 29, 72, 0.15); border: 1px solid #f43f5e; color: #fda4af; }}
+        .badge-success {{ background: #e6f4eb; color: var(--retro-green); border-color: var(--retro-green); }}
+        .badge-warning {{ background: #fffcf0; color: var(--retro-mustard); border-color: var(--retro-mustard); }}
+        .badge-danger {{ background: #fdf2f2; color: var(--stamp-red); border-color: var(--stamp-red); }}
 
         /* Filter Controls */
         .filter-bar {{
@@ -286,35 +260,38 @@ def generate_html():
         .search-input {{
             flex: 1;
             min-width: 250px;
-            background: rgba(17, 24, 39, 0.8);
-            border: 1px solid var(--card-border);
+            background: #ffffff;
+            border: var(--border-solid);
             padding: 0.75rem 1.25rem;
-            border-radius: 12px;
-            color: var(--text-primary);
+            border-radius: 4px;
+            color: var(--ink-dark);
             font-family: inherit;
             outline: none;
-            transition: border-color 0.3s;
+            box-shadow: 3px 3px 0px var(--ink-dark);
+            transition: all 0.2s;
         }}
 
         .search-input:focus {{
-            border-color: var(--accent-teal);
-            box-shadow: 0 0 10px var(--accent-teal-glow);
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0px var(--ink-dark);
         }}
 
         .filter-select {{
-            background: rgba(17, 24, 39, 0.8);
-            border: 1px solid var(--card-border);
+            background: #ffffff;
+            border: var(--border-solid);
             padding: 0.75rem 1.25rem;
-            border-radius: 12px;
-            color: var(--text-primary);
+            border-radius: 4px;
+            color: var(--ink-dark);
             font-family: inherit;
             outline: none;
             cursor: pointer;
-            transition: border-color 0.3s;
+            box-shadow: 3px 3px 0px var(--ink-dark);
+            transition: all 0.2s;
         }}
 
         .filter-select:focus {{
-            border-color: var(--accent-teal);
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0px var(--ink-dark);
         }}
 
         /* Interactive Claims List */
@@ -325,24 +302,25 @@ def generate_html():
         }}
 
         .claim-row {{
-            background: rgba(17, 24, 39, 0.4);
-            border: 1px solid var(--card-border);
-            border-radius: 16px;
+            background: #ffffff;
+            border: var(--border-solid);
+            border-radius: 4px;
             overflow: hidden;
-            transition: all 0.3s ease;
+            box-shadow: 4px 4px 0px var(--ink-dark);
+            transition: all 0.2s;
         }}
 
         .claim-row.failed-match {{
-            border-left: 4px solid var(--accent-coral);
+            border-left: 8px solid var(--stamp-red);
         }}
 
         .claim-row.passed-match {{
-            border-left: 4px solid var(--accent-teal);
+            border-left: 8px solid var(--retro-green);
         }}
 
         .claim-row:hover {{
-            background: rgba(17, 24, 39, 0.6);
-            transform: scale(0.995);
+            transform: translate(-1px, -1px);
+            box-shadow: 5px 5px 0px var(--ink-dark);
         }}
 
         .claim-summary-header {{
@@ -368,15 +346,14 @@ def generate_html():
             padding: 0;
             max-height: 0;
             overflow: hidden;
-            background: rgba(11, 15, 25, 0.6);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border-top: 0px solid var(--card-border);
+            background: #faf9f6;
+            transition: all 0.3s ease-out;
         }}
 
         .claim-detail-drawer.open {{
             padding: 2rem;
             max-height: 2500px;
-            border-top: 1px solid var(--card-border);
+            border-top: var(--border-thin);
         }}
 
         .drawer-grid {{
@@ -401,24 +378,26 @@ def generate_html():
             font-size: 1.05rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: var(--text-secondary);
+            color: var(--ink-muted);
             margin-bottom: 0.75rem;
             font-weight: 700;
-            border-bottom: 1px solid var(--card-border);
+            border-bottom: var(--border-solid);
             padding-bottom: 0.5rem;
+            font-family: 'Space Mono', monospace;
         }}
 
         .data-label {{
             font-size: 0.75rem;
-            color: var(--text-secondary);
+            color: var(--ink-muted);
             text-transform: uppercase;
             letter-spacing: 0.05em;
             margin-bottom: 0.25rem;
+            font-family: 'Space Mono', monospace;
         }}
 
         .data-value {{
             font-size: 0.95rem;
-            font-weight: 500;
+            font-weight: 600;
         }}
 
         .data-grid-2 {{
@@ -428,20 +407,22 @@ def generate_html():
         }}
 
         .justification-box {{
-            background: rgba(31, 41, 55, 0.4);
-            border: 1px solid var(--card-border);
-            border-radius: 12px;
+            background: #ffffff;
+            border: var(--border-solid);
+            box-shadow: 2px 2px 0px var(--ink-dark);
+            border-radius: 4px;
             padding: 1.25rem;
             font-size: 0.92rem;
             line-height: 1.6;
         }}
 
         .trace-box {{
-            background: #060913;
-            border: 1px solid var(--card-border);
-            border-radius: 12px;
+            background: #1d2436;
+            color: #f5f2eb;
+            border: var(--border-solid);
+            border-radius: 4px;
             padding: 1.25rem;
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Space Mono', monospace;
             font-size: 0.85rem;
             overflow-x: auto;
             max-height: 350px;
@@ -450,8 +431,8 @@ def generate_html():
 
         .trace-item {{
             margin-bottom: 0.75rem;
-            color: #2dd4bf;
-            border-left: 2px solid var(--accent-teal);
+            color: #cdd6e2;
+            border-left: 2px solid var(--retro-mustard);
             padding-left: 0.75rem;
         }}
 
@@ -462,6 +443,7 @@ def generate_html():
         .indicator-icon {{
             font-size: 1.25rem;
             transition: transform 0.3s;
+            font-family: 'Space Mono', monospace;
         }}
 
         .open .indicator-icon {{
@@ -479,19 +461,20 @@ def generate_html():
             display: flex;
             justify-content: space-between;
             font-size: 0.9rem;
-            border-bottom: 1px dashed var(--card-border);
+            border-bottom: 1px dashed var(--ink-muted);
             padding-bottom: 0.5rem;
         }}
 
         .cost-list li span:last-child {{
-            font-weight: 600;
-            color: var(--text-primary);
+            font-weight: 700;
+            color: var(--ink-dark);
+            font-family: 'Space Mono', monospace;
         }}
 
         .cost-total {{
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: #2dd4bf !important;
+            font-size: 1.15rem;
+            font-weight: 900;
+            color: var(--stamp-red) !important;
             border-bottom: none !important;
             padding-top: 0.5rem;
         }}
@@ -501,12 +484,12 @@ def generate_html():
 
     <header>
         <div>
-            <h1 class="brand-title">HackerRank Orchestrate Dashboard</h1>
-            <p class="subtitle">Evidence-Grounded Damage Claims Agent (EGDCA) Verification Runner</p>
+            <h1 class="brand-title">EGDCA Claims Audit Dashboard</h1>
+            <p class="subtitle">Evidence-Grounded Damage Claims Agent — Verification Metrics</p>
         </div>
-        <div class="status-badge-header">
-            <div class="pulse-dot"></div>
-            <span>EVALUATION COMPLETED</span>
+        <div class="hanko-stamp">
+            検 査 済<br>
+            VERIFIED
         </div>
     </header>
 
@@ -522,39 +505,29 @@ def generate_html():
             <div class="stat-card">
                 <div class="stat-label">Object Part Acc</div>
                 <div class="stat-value">{accuracies.get("object_part", 0.0)*100:.1f}%</div>
-                <div class="stat-details">Coarse / Fine structural parts matching</div>
+                <div class="stat-details">Coarse/fine visible part localization</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Issue Type Acc</div>
                 <div class="stat-value">{accuracies.get("issue_type", 0.0)*100:.1f}%</div>
-                <div class="stat-details">Damage taxonomy classification</div>
+                <div class="stat-details">Damage classification accuracy</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Severity Acc</div>
                 <div class="stat-value">{accuracies.get("severity", 0.0)*100:.1f}%</div>
-                <div class="stat-details">Visual damage intensity calibration</div>
-            </div>
-            <div class="stat-card amber">
-                <div class="stat-label">Evidence Std Acc</div>
-                <div class="stat-value">{accuracies.get("evidence_standard_met", 0.0)*100:.1f}%</div>
-                <div class="stat-details">Evidence requirements alignment</div>
-            </div>
-            <div class="stat-card coral">
-                <div class="stat-label">Valid Image Acc</div>
-                <div class="stat-value">{accuracies.get("valid_image", 0.0)*100:.1f}%</div>
-                <div class="stat-details">Integrity and fraud audit filters</div>
+                <div class="stat-details">Evaluated physical severity rating</div>
             </div>
         </section>
 
-        <!-- Breakdown & System Usage -->
-        <section class="mid-grid">
+        <!-- Mid Breakdown Section -->
+        <div class="mid-grid">
             
             <div class="section-card">
-                <h2 class="section-title">Object Breakdown Accuracies</h2>
+                <h2 class="section-title">Object Breakdown</h2>
                 <table>
                     <thead>
                         <tr>
-                            <th>Object Type</th>
+                            <th>Object Domain</th>
                             <th>Total Claims</th>
                             <th>Status Acc</th>
                             <th>Part Acc</th>
@@ -563,42 +536,46 @@ def generate_html():
                         </tr>
                     </thead>
                     <tbody>
+"""
+    
+    obj_types = ["car", "laptop", "package"]
+    for obj in obj_types:
+        m_obj = object_breakdown.get(obj, {})
+        if m_obj.get("total", 0) > 0:
+            html_content += f"""
                         <tr>
-                            <td><strong>Car Panels & Glass</strong></td>
-                            <td>{object_breakdown.get("car", {}).get("total", 0)}</td>
-                            <td>{object_breakdown.get("car", {}).get("claim_status_accuracy", 0.0)*100:.1f}%</td>
-                            <td>{object_breakdown.get("car", {}).get("object_part_accuracy", 0.0)*100:.1f}%</td>
-                            <td>{object_breakdown.get("car", {}).get("issue_type_accuracy", 0.0)*100:.1f}%</td>
-                            <td>{object_breakdown.get("car", {}).get("severity_accuracy", 0.0)*100:.1f}%</td>
+                            <td style="font-weight: 700; text-transform: capitalize;">{obj}</td>
+                            <td style="font-family: 'Space Mono', monospace;">{m_obj['total']}</td>
+                            <td style="font-family: 'Space Mono', monospace; font-weight: 700; color: var(--retro-green);">{m_obj['claim_status_accuracy']*100:.1f}%</td>
+                            <td style="font-family: 'Space Mono', monospace;">{m_obj['object_part_accuracy']*100:.1f}%</td>
+                            <td style="font-family: 'Space Mono', monospace;">{m_obj['issue_type_accuracy']*100:.1f}%</td>
+                            <td style="font-family: 'Space Mono', monospace;">{m_obj['severity_accuracy']*100:.1f}%</td>
                         </tr>
+            """
+        else:
+            html_content += f"""
                         <tr>
-                            <td><strong>Laptop Electronics</strong></td>
-                            <td>{object_breakdown.get("laptop", {}).get("total", 0)}</td>
-                            <td>{object_breakdown.get("laptop", {}).get("claim_status_accuracy", 0.0)*100:.1f}%</td>
-                            <td>{object_breakdown.get("laptop", {}).get("object_part_accuracy", 0.0)*100:.1f}%</td>
-                            <td>{object_breakdown.get("laptop", {}).get("issue_type_accuracy", 0.0)*100:.1f}%</td>
-                            <td>{object_breakdown.get("laptop", {}).get("severity_accuracy", 0.0)*100:.1f}%</td>
+                            <td style="font-weight: 700; text-transform: capitalize;">{obj}</td>
+                            <td style="font-family: 'Space Mono', monospace;">0</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
                         </tr>
-                        <tr>
-                            <td><strong>Shipping Packages</strong></td>
-                            <td>{object_breakdown.get("package", {}).get("total", 0)}</td>
-                            <td>{object_breakdown.get("package", {}).get("claim_status_accuracy", 0.0)*100:.1f}%</td>
-                            <td>{object_breakdown.get("package", {}).get("object_part_accuracy", 0.0)*100:.1f}%</td>
-                            <td>{object_breakdown.get("package", {}).get("issue_type_accuracy", 0.0)*100:.1f}%</td>
-                            <td>{object_breakdown.get("package", {}).get("severity_accuracy", 0.0)*100:.1f}%</td>
-                        </tr>
+            """
+
+    html_content += f"""
                     </tbody>
                 </table>
                 
-                <h3 style="font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.75rem;">Risk Flags Audit Summary</h3>
-                <div class="data-grid-2">
+                <div style="margin-top: 1.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; border-top: var(--border-thin); padding-top: 1.5rem;">
                     <div>
-                        <div class="data-label">Exact Risk Flags Match Accuracy</div>
-                        <div class="data-value">{risk_stats.get("exact_match_accuracy", 0.0)*100:.1f}%</div>
+                        <div class="data-label">Exact Risk Flags Match</div>
+                        <div class="data-value" style="font-family: 'Space Mono', monospace; font-size: 1.25rem;">{risk_stats.get("exact_match_accuracy", 0.0)*100:.1f}%</div>
                     </div>
                     <div>
                         <div class="data-label">Average Risk Flags Jaccard Similarity</div>
-                        <div class="data-value">{risk_stats.get("average_jaccard_similarity", 0.0):.4f}</div>
+                        <div class="data-value" style="font-family: 'Space Mono', monospace; font-size: 1.25rem;">{risk_stats.get("average_jaccard_similarity", 0.0):.4f}</div>
                     </div>
                 </div>
             </div>
@@ -606,7 +583,7 @@ def generate_html():
             <div class="section-card">
                 <h2 class="section-title">Token Usage & Cost</h2>
                 <ul class="cost-list">
-                    <li><span>VLM Calls (Pass 1-4)</span> <span>{vlm_calls} calls</span></li>
+                    <li><span>VLM Calls (Pass 1-3)</span> <span>{vlm_calls} calls</span></li>
                     <li><span>VLM Input Tokens</span> <span>{tot_vlm_in:,}</span></li>
                     <li><span>VLM Output Tokens</span> <span>{tot_vlm_out:,}</span></li>
                     <li><span>Text Calls (Pass 0 Extractor)</span> <span>{text_calls} calls</span></li>
@@ -616,14 +593,14 @@ def generate_html():
                 </ul>
             </div>
 
-        </section>
+        </div>
 
         <!-- Claims Explorer Bar -->
         <section class="section-card">
             <h2 class="section-title">
                 <span>Claims Explorer</span>
-                <span style="font-size: 0.95rem; color: var(--text-secondary); font-weight: normal;">
-                    Showing <span id="visible-count">{total_claims}</span> of {total_claims} Claims
+                <span style="font-size: 0.95rem; color: var(--ink-muted); font-weight: normal; font-family: 'Space Mono', monospace;">
+                    SHOWING <span id="visible-count">{total_claims}</span> OF {total_claims} CLAIMS
                 </span>
             </h2>
 
@@ -705,13 +682,13 @@ def generate_html():
                     const rowHtml = `
                         <div class="claim-row ${{matchClass}}" id="claim-block-${{c.row_index}}">
                             <div class="claim-summary-header" onclick="toggleDrawer(${{c.row_index}})">
-                                <span style="font-weight: 700;">${{c.user_id}}</span>
-                                <span class="hide-mobile" style="color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; overflow: hidden; font-size: 0.85rem;">
-                                    ${{c.object.toUpperCase()}}
+                                <span style="font-weight: 700; font-family: 'Space Mono', monospace;">${{c.user_id}}</span>
+                                <span class="hide-mobile" style="color: var(--ink-muted); text-transform: uppercase; font-family: 'Space Mono', monospace; font-size: 0.85rem;">
+                                    ${{c.object}}
                                 </span>
                                 <span><span class="badge ${{statusBadgeClass}}">${{c.status.predicted}}</span></span>
-                                <span class="hide-mobile" style="font-size: 0.85rem;">Part: <strong style="color: #2dd4bf;">${{c.object_part.predicted}}</strong></span>
-                                <span class="hide-mobile" style="font-size: 0.85rem;">Issue: <strong style="color: #fbbf24;">${{c.issue_type.predicted}}</strong></span>
+                                <span class="hide-mobile" style="font-size: 0.85rem;">Part: <strong style="color: var(--retro-green);">${{c.object_part.predicted}}</strong></span>
+                                <span class="hide-mobile" style="font-size: 0.85rem;">Issue: <strong style="color: var(--retro-mustard);">${{c.issue_type.predicted}}</strong></span>
                                 <span class="indicator-icon">▸</span>
                             </div>
                             
@@ -732,7 +709,7 @@ def generate_html():
                                             </div>
                                             <div style="margin-top: 1rem;">
                                                 <div class="data-label">Stated Claim Details</div>
-                                                <div class="data-value" style="font-size: 0.9rem; font-style: italic; background: rgba(31, 41, 55, 0.2); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--card-border);">
+                                                <div class="data-value" style="font-size: 0.9rem; font-style: italic; background: rgba(31, 41, 55, 0.05); padding: 0.75rem; border-radius: 4px; border: var(--border-thin);">
                                                     Claimed Part: <strong>${{c.object_part.expected}}</strong><br>
                                                     Claimed Damage: <strong>${{c.issue_type.expected}}</strong>
                                                 </div>
@@ -742,12 +719,12 @@ def generate_html():
                                         <div>
                                             <div class="drawer-section-title">Decision Match Results</div>
                                             <div class="cost-list">
-                                                <li><span>Claim Status Match</span> <span style="color: ${{c.status.match ? '#2dd4bf':'#f43f5e'}}">${{c.status.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.status.expected}})</span></li>
-                                                <li><span>Object Part Match</span> <span style="color: ${{c.object_part.match ? '#2dd4bf':'#f43f5e'}}">${{c.object_part.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.object_part.expected}})</span></li>
-                                                <li><span>Issue Type Match</span> <span style="color: ${{c.issue_type.match ? '#2dd4bf':'#f43f5e'}}">${{c.issue_type.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.issue_type.expected}})</span></li>
-                                                <li><span>Severity Match</span> <span style="color: ${{c.severity.match ? '#2dd4bf':'#f43f5e'}}">${{c.severity.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.severity.expected}})</span></li>
-                                                <li><span>Evidence Standard Match</span> <span style="color: ${{c.evidence_standard_met.match ? '#2dd4bf':'#f43f5e'}}">${{c.evidence_standard_met.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.evidence_standard_met.expected}})</span></li>
-                                                <li><span>Valid Image Match</span> <span style="color: ${{c.valid_image.match ? '#2dd4bf':'#f43f5e'}}">${{c.valid_image.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.valid_image.expected}})</span></li>
+                                                <li><span>Claim Status Match</span> <span style="color: ${{c.status.match ? 'var(--retro-green)':'var(--stamp-red)'}}">${{c.status.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.status.expected}})</span></li>
+                                                <li><span>Object Part Match</span> <span style="color: ${{c.object_part.match ? 'var(--retro-green)':'var(--stamp-red)'}}">${{c.object_part.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.object_part.expected}})</span></li>
+                                                <li><span>Issue Type Match</span> <span style="color: ${{c.issue_type.match ? 'var(--retro-green)':'var(--stamp-red)'}}">${{c.issue_type.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.issue_type.expected}})</span></li>
+                                                <li><span>Severity Match</span> <span style="color: ${{c.severity.match ? 'var(--retro-green)':'var(--stamp-red)'}}">${{c.severity.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.severity.expected}})</span></li>
+                                                <li><span>Evidence Standard Match</span> <span style="color: ${{c.evidence_standard_met.match ? 'var(--retro-green)':'var(--stamp-red)'}}">${{c.evidence_standard_met.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.evidence_standard_met.expected}})</span></li>
+                                                <li><span>Valid Image Match</span> <span style="color: ${{c.valid_image.match ? 'var(--retro-green)':'var(--stamp-red)'}}">${{c.valid_image.match ? 'PASS' : 'FAIL'}} (Expected: ${{c.valid_image.expected}})</span></li>
                                             </div>
                                         </div>
                                     </div>
@@ -758,7 +735,7 @@ def generate_html():
                                             <div class="justification-box">
                                                 ${{c.status.predicted === 'not_enough_information' ? 'Not Enough Info: ' : ''}} 
                                                 <strong>Decided Status: ${{c.status.predicted.toUpperCase()}}</strong><br>
-                                                <p style="margin-top: 0.5rem; color: var(--text-primary); font-size: 0.95rem;">
+                                                <p style="margin-top: 0.5rem; color: var(--ink-dark); font-size: 0.95rem;">
                                                     ${{c.status.predicted === 'supported' || c.status.predicted === 'contradicted' ? 'Justification: ' : 'Reason: '}}
                                                     ${{c.status.expected === 'supported' || c.status.expected === 'contradicted' ? 'Visual observations support the final decision.' : 'Visual context was insufficient.'}}
                                                 </p>
@@ -766,10 +743,10 @@ def generate_html():
                                         </div>
                                         
                                         <div>
-                                            <div class="drawer-section-title font-mono">Consensus Details</div>
-                                            <div class="justification-box" style="font-family: inherit;">
+                                            <div class="drawer-section-title">Consensus Details</div>
+                                            <div class="justification-box">
                                                 <div class="data-label">Active Risk Flags</div>
-                                                <div class="data-value" style="font-weight: 600; color: ${{risks_str !== 'none' ? '#f43f5e':'var(--text-primary)'}}">${{risks_str}}</div>
+                                                <div class="data-value" style="font-weight: 700; color: ${{risks_str !== 'none' ? 'var(--stamp-red)':'var(--ink-dark)'}}">${{risks_str}}</div>
                                             </div>
                                         </div>
                                     </div>
