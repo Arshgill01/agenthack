@@ -52,14 +52,14 @@
 ## Operational Analysis (Actual Measured API Usage)
 
 - **Number of Actual API Calls:**
-  - VLM Image Audit calls: 42
-  - Text Extraction calls: 9
+  - VLM Image Audit calls: 0
+  - Text Extraction calls: 0
 - **Actual Measured API Token Usage:**
-  - VLM Input Tokens: 142740
-  - VLM Output Tokens: 12867
-  - Text Input Tokens: 4551
-  - Text Output Tokens: 319
+  - VLM Input Tokens: 0
+  - VLM Output Tokens: 0
+  - Text Input Tokens: 0
+  - Text Output Tokens: 0
 - **Number of Images Processed:** 29
-- **Actual Cost for this Run:** $0.01500 (pricing: input=$0.075/1M, output=$0.30/1M)
+- **Actual Cost for this Run:** $0.00000 (pricing: input=$0.075/1M, output=$0.30/1M)
 - **Caching Note:** Cache hits consumed 0 actual API tokens and incurred $0.00 actual cost.
 - **Approximate Latency:** ~2.5 seconds per claim (without caching; ~0.01 seconds with caching)

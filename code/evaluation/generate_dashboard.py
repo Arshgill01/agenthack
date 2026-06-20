@@ -276,6 +276,13 @@ def generate_html():
             box-shadow: 4px 4px 0px var(--ink-dark);
         }}
 
+        .search-input:focus-visible,
+        .filter-select:focus-visible,
+        .claim-summary-header:focus-visible {{
+            outline: 2px solid var(--stamp-red);
+            outline-offset: 2px;
+        }}
+
         .filter-select {{
             background: #ffffff;
             border: var(--border-solid);
@@ -330,15 +337,19 @@ def generate_html():
             align-items: center;
             cursor: pointer;
             gap: 1rem;
+            outline: none;
         }}
 
         @media (max-width: 768px) {{
             .claim-summary-header {{
-                grid-template-columns: 1fr 1fr;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
                 gap: 0.5rem;
+                padding: 1rem;
             }}
             .hide-mobile {{
-                display: none;
+                display: block;
             }}
         }}
 
@@ -605,20 +616,20 @@ def generate_html():
             </h2>
 
             <div class="filter-bar">
-                <input type="text" id="search-box" class="search-input" placeholder="Search by User ID, claimed part, or words inside user claims...">
-                <select id="filter-object" class="filter-select">
+                <input type="text" id="search-box" class="search-input" placeholder="Search by User ID, claimed part, or words inside user claims..." aria-label="Search claims by user ID, part, or damage type">
+                <select id="filter-object" class="filter-select" aria-label="Filter claims by object domain">
                     <option value="all">All Objects</option>
                     <option value="car">Cars</option>
                     <option value="laptop">Laptops</option>
                     <option value="package">Packages</option>
                 </select>
-                <select id="filter-status" class="filter-select">
+                <select id="filter-status" class="filter-select" aria-label="Filter claims by expected decision status">
                     <option value="all">All Decisions</option>
                     <option value="supported">Supported</option>
                     <option value="contradicted">Contradicted</option>
                     <option value="not_enough_information">Not Enough Info</option>
                 </select>
-                <select id="filter-match" class="filter-select">
+                <select id="filter-match" class="filter-select" aria-label="Filter claims by test suite match status">
                     <option value="all">All Test Matches</option>
                     <option value="passed">PASS Matches</option>
                     <option value="failed">FAIL Matches</option>
@@ -681,7 +692,7 @@ def generate_html():
 
                     const rowHtml = `
                         <div class="claim-row ${{matchClass}}" id="claim-block-${{c.row_index}}">
-                            <div class="claim-summary-header" onclick="toggleDrawer(${{c.row_index}})">
+                            <div class="claim-summary-header" onclick="toggleDrawer(${{c.row_index}})" role="button" tabindex="0" aria-expanded="false" onkeydown="if(event.key==='Enter'||event.key===' '){{ event.preventDefault(); toggleDrawer(${{c.row_index}}); }}" aria-label="Toggle details for claim ${{c.user_id}}">
                                 <span style="font-weight: 700; font-family: 'Space Mono', monospace;">${{c.user_id}}</span>
                                 <span class="hide-mobile" style="color: var(--ink-muted); text-transform: uppercase; font-family: 'Space Mono', monospace; font-size: 0.85rem;">
                                     ${{c.object}}
@@ -764,13 +775,16 @@ def generate_html():
         function toggleDrawer(index) {{
             const drawer = document.getElementById('drawer-' + index);
             const header = document.getElementById('claim-block-' + index);
+            const summaryHeader = header.querySelector('.claim-summary-header');
             
             if (drawer.classList.contains('open')) {{
                 drawer.classList.remove('open');
                 header.classList.remove('open');
+                summaryHeader.setAttribute('aria-expanded', 'false');
             }} else {{
                 drawer.classList.add('open');
                 header.classList.add('open');
+                summaryHeader.setAttribute('aria-expanded', 'true');
             }}
         }}
 
