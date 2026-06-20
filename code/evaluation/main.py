@@ -235,6 +235,7 @@ def run_evaluation() -> int:
     }
     metrics["blind_aware_agreement_stats"] = agreement_counts
     metrics["actual_token_usage"] = usage
+    metrics["results"] = results
 
     print("\n" + "="*50)
     print("EVALUATION REPORT - SAMPLE CLAIMS")

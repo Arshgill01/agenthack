@@ -2,13 +2,14 @@ from __future__ import annotations
 import csv
 import logging
 from pathlib import Path
-from config import DATA_DIR
+from config import DATA_DIR, ENABLE_SELF_CORRECTION, CONFIDENCE_THRESHOLD, SHADOW_MODE_RECONCILIATION
 from model_client import ModelClient
 from extractor import ClaimExtractor
 from auditor import ImageAuditor
 from blind_auditor import BlindImageAuditor
 from decision import DecisionEngine
 from linter import OutputLinter
+from self_corrector import SelfCorrector
 
 logger = logging.getLogger("pipeline")
 
@@ -18,6 +19,7 @@ class ClaimReviewPipeline:
         self.extractor = ClaimExtractor(self.client)
         self.auditor = ImageAuditor(self.client)
         self.blind_auditor = BlindImageAuditor(self.client)
+        self.self_corrector = SelfCorrector(self.client)
         self.decision_engine = DecisionEngine()
         self.linter = OutputLinter()
         self.last_run_extra = {}
@@ -138,6 +140,45 @@ class ClaimReviewPipeline:
                 matched_reqs=matched_reqs
             )
 
+            # Gated Reconciliation
+            reconciled_result = None
+            if ENABLE_SELF_CORRECTION:
+                blind_consensus = blind_result.get("consensus", {})
+                blind_dmg = blind_consensus.get("primary_damage", "unknown")
+                blind_pt = blind_consensus.get("primary_part", "unknown")
+                blind_conf = blind_consensus.get("confidence", 0.8)
+
+                aware_consensus = audit_result.get("consensus", {})
+                aware_dmg = aware_consensus.get("primary_damage", "unknown")
+                aware_pt = aware_consensus.get("primary_part", "unknown")
+                aware_conf = aware_consensus.get("confidence", 0.8)
+
+                sev_map = {"none": 0, "low": 1, "medium": 2, "high": 3, "unknown": 0}
+                blind_sev_score = sev_map.get(blind_consensus.get("primary_severity", "unknown"), 0)
+                aware_sev_score = sev_map.get(aware_consensus.get("primary_severity", "unknown"), 0)
+                sev_delta = abs(blind_sev_score - aware_sev_score)
+
+                disagreement = (blind_dmg != aware_dmg) or (blind_pt != aware_pt) or (sev_delta >= 2)
+                low_confidence = (blind_conf < CONFIDENCE_THRESHOLD) or (aware_conf < CONFIDENCE_THRESHOLD)
+                
+                # Only trigger self-correction on actual pass disagreements or low confidence.
+                if disagreement or low_confidence:
+                    logger.info(f"Reconciliation trigger met: disagreement={disagreement}, low_confidence={low_confidence}. Running Pass 3 reconciler VLM...")
+                    claim_details["user_id"] = user_id
+                    rec_res = self.self_corrector.reconcile(
+                        image_paths=image_paths,
+                        claim_object=claim_object,
+                        claim_details=claim_details,
+                        blind_result=blind_result,
+                        aware_result=audit_result,
+                        matched_reqs=matched_reqs
+                    )
+                    
+                    if not SHADOW_MODE_RECONCILIATION:
+                        reconciled_result = rec_res
+                    else:
+                        logger.info(f"Shadow mode active. Reconciler returned: resolved_dmg={rec_res.get('resolved_damage')}, resolved_part={rec_res.get('resolved_part')}")
+
             # 3. Decision making
             decision = self.decision_engine.evaluate(
                 claim_details=claim_details,
@@ -145,7 +186,8 @@ class ClaimReviewPipeline:
                 audit_result=audit_result,
                 claim_object=claim_object,
                 blind_result=blind_result,
-                matched_reqs=matched_reqs
+                matched_reqs=matched_reqs,
+                reconciled_result=reconciled_result
             )
 
             # 4. Strict Linting & Formatting

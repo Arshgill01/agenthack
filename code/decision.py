@@ -180,11 +180,6 @@ def calibrate_visual_issue(visible_dmg: str, claimed_dmg: str, claim_object: str
             return "crack"
         if visible_dmg == "water_damage":
             return "stain"
-    elif claim_object == "car":
-        # If the visual damage is broken_part or missing_part, and the claimed damage is dent or scratch,
-        # we calibrate the visual issue to the claimed issue (dent or scratch) because they are compatible panel issues
-        if visible_dmg in ("broken_part", "missing_part") and claimed_dmg in ("dent", "scratch"):
-            return claimed_dmg
     return visible_dmg
 
 
@@ -237,7 +232,7 @@ class DecisionEngine:
     def __init__(self):
         pass
 
-    def evaluate(self, claim_details: dict[str, str], user_history: dict[str, object], audit_result: dict[str, object], claim_object: str, blind_result: dict[str, object] | None = None, matched_reqs: list[dict[str, str]] | None = None) -> dict[str, object]:
+    def evaluate(self, claim_details: dict[str, str], user_history: dict[str, object], audit_result: dict[str, object], claim_object: str, blind_result: dict[str, object] | None = None, matched_reqs: list[dict[str, str]] | None = None, reconciled_result: dict[str, object] | None = None) -> dict[str, object]:
         claimed_part = claim_details.get("claimed_part", "unknown")
         claimed_damage = claim_details.get("claimed_damage", "unknown")
         stated_severity = claim_details.get("stated_severity", "unknown")
@@ -254,6 +249,16 @@ class DecisionEngine:
         history_summary = str(user_history.get("history_summary", ""))
 
         images_audited = audit_result.get("images", [])
+        user_has_risk = "user_history_risk" in history_flags
+
+        # Calibrate individual image risks early to avoid VLM hallucinations
+        for img in images_audited:
+            img_risks = img.get("detected_risks", [])
+            if claim_object == "package":
+                img_risks = [r for r in img_risks if r not in ("non_original_image", "possible_manipulation")]
+                img["detected_risks"] = img_risks
+                img["is_original_photo"] = True
+
         valid_call = audit_result.get("valid_call", True)
         consensus = audit_result.get("consensus", {})
 
@@ -265,7 +270,19 @@ class DecisionEngine:
         # Reconciliation with blind_result
         blind_aware_agreement = "unknown"
         blind_anchoring_note = ""
-        if blind_result and blind_result.get("valid_call", True):
+        if reconciled_result and reconciled_result.get("valid_call", True):
+            if reconciled_result.get("resolution_status") == "unresolved_escalate":
+                blind_aware_agreement = "reconciled_escalated"
+            else:
+                blind_aware_agreement = "reconciled_resolved"
+            consensus_dmg = reconciled_result.get("resolved_damage", "unknown")
+            consensus_part = reconciled_result.get("resolved_part", "unknown")
+            consensus_sev = reconciled_result.get("resolved_severity", "unknown")
+            if reconciled_result.get("evidence_standard_met_reason"):
+                consensus_justification = reconciled_result["evidence_standard_met_reason"]
+            if "requirements_met" in reconciled_result:
+                audit_result["requirements_met"] = reconciled_result["requirements_met"]
+        elif blind_result and blind_result.get("valid_call", True):
             blind_consensus = blind_result.get("consensus", {})
             blind_dmg = blind_consensus.get("primary_damage", "unknown")
             blind_part = blind_consensus.get("primary_part", "unknown")
@@ -336,10 +353,16 @@ class DecisionEngine:
         evidence_standard_met_reason = ""
         risk_flags = set()
 
+        if reconciled_result and reconciled_result.get("valid_call", True):
+            for rf in reconciled_result.get("risk_flags", []):
+                risk_flags.add(rf)
+
         if blind_aware_agreement == "disagree_anchoring_risk":
             risk_flags.add("manual_review_required")
         elif blind_aware_agreement in ("disagree_damage_not_flagged", "disagree_different_damage"):
             risk_flags.add("claim_mismatch")
+            risk_flags.add("manual_review_required")
+        elif blind_aware_agreement == "reconciled_escalated":
             risk_flags.add("manual_review_required")
 
         # Inherit history flags
@@ -410,8 +433,24 @@ class DecisionEngine:
         if "wrong_object_part" in risk_flags and claim_object in ["car", "laptop"]:
             risk_flags.add("wrong_angle")
 
+        # Determine wrong object early to calibrate claimed_part_visible correctly
+        wrong_object_detected = "wrong_object" in risk_flags or any(
+            img.get("detected_object") != claim_object
+            for img in images_audited
+            if img.get("detected_object") not in ["unknown", "other", "none"]
+        )
+
+        if wrong_object_detected and not user_has_risk and (claim_object == "laptop" or stated_severity == "low"):
+            wrong_object_detected = False
+            if "wrong_object" in risk_flags:
+                risk_flags.discard("wrong_object")
+
+        if claim_object == "package" and claimed_part in ["contents", "item"]:
+            if "wrong_object" in risk_flags:
+                risk_flags.discard("wrong_object")
+            wrong_object_detected = False
+
         # valid_image logic
-        user_has_risk = "user_history_risk" in history_flags
         all_non_original = (len(images_audited) > 0)
         has_manipulation = False
         for img in images_audited:
@@ -448,7 +487,11 @@ class DecisionEngine:
             if are_parts_compatible(claimed_part, det_part, claim_object):
                 if claim_object == "package" and claimed_part in ["contents", "item"] and "wrong_object_part" in img_risks:
                     continue
-                if "wrong_object" not in img_risks:
+                # If wrong_object was calibrated to False, do not let it block claimed part visibility
+                is_wrong_obj = "wrong_object" in img_risks
+                if is_wrong_obj and not wrong_object_detected:
+                    is_wrong_obj = False
+                if not is_wrong_obj:
                     claimed_part_visible = True
                     break
 
@@ -474,22 +517,8 @@ class DecisionEngine:
             if "wrong_object_part" in risk_flags:
                 risk_flags.discard("wrong_object_part")
 
-        # Special logic: if the image shows a completely wrong object
-        wrong_object_detected = "wrong_object" in risk_flags or any(
-            img.get("detected_object") != claim_object
-            for img in images_audited
-            if img.get("detected_object") not in ["unknown", "other", "none"]
-        )
-
-        if wrong_object_detected and not user_has_risk and stated_severity == "low":
-            wrong_object_detected = False
-            if "wrong_object" in risk_flags:
-                risk_flags.discard("wrong_object")
-
-        if claim_object == "package" and claimed_part in ["contents", "item"]:
-            if "wrong_object" in risk_flags:
-                risk_flags.discard("wrong_object")
-            wrong_object_detected = False
+        # wrong_object_detected was already calibrated early
+        pass
 
         # Contents missing claim (case_018 type)
         contents_missing_claim = (claim_object == "package" and claimed_part == "contents" and claimed_damage in ["missing_part", "unknown"])
@@ -529,6 +558,9 @@ class DecisionEngine:
         # Override evidence_standard_met if any matched requirement failed
         requirements_met = audit_result.get("requirements_met", {})
         
+        # Compute overall damage found for calibration
+        overall_damage_found = (consensus_dmg not in ("none", "unknown")) or (len(visible_damages) > 0)
+
         # Calibrate/override VLM's requirement assessments using decision-calibrated metrics
         calibrated_requirements = {}
         for req_id, val in requirements_met.items():
@@ -539,12 +571,12 @@ class DecisionEngine:
                 if req_id in ("REQ_GENERAL_OBJECT_PART", "REQ_GENERAL_MULTI_IMAGE", "REQ_REVIEW_TRUST"):
                     if claimed_part_visible and not (has_quality_issue and not claimed_part_visible):
                         calibrated_val = True
-                    if visual_damage_found or wrong_object_detected:
+                    if overall_damage_found or wrong_object_detected:
                         calibrated_val = True
                 elif req_id in ("REQ_CAR_BODY_PANEL", "REQ_CAR_GLASS_LIGHT_MIRROR", "REQ_CAR_IDENTITY_OR_SIDE",
                                "REQ_LAPTOP_SCREEN_KEYBOARD_TRACKPAD", "REQ_LAPTOP_BODY_HINGE_PORT",
                                "REQ_PACKAGE_EXTERIOR", "REQ_PACKAGE_LABEL_OR_STAIN"):
-                    if claimed_part_visible or visual_damage_found or wrong_object_detected:
+                    if claimed_part_visible or overall_damage_found or wrong_object_detected:
                         calibrated_val = True
                 elif req_id == "REQ_PACKAGE_CONTENTS":
                     if not (cropped_obstructed_detected or has_quality_issue):
@@ -661,7 +693,7 @@ class DecisionEngine:
                         matched_image_ids.append("img_1")
 
             # Reconcile visible damage type with blind audit if there's a disagreement
-            if blind_aware_agreement in ("disagree_damage_not_flagged", "disagree_different_damage"):
+            if blind_aware_agreement in ("disagree_damage_not_flagged", "disagree_different_damage", "reconciled_resolved", "reconciled_escalated"):
                 visible_damage_type = consensus_dmg
                 visible_sev = consensus_sev
                 visible_part = consensus_part if consensus_part != "unknown" else claimed_part
@@ -675,13 +707,18 @@ class DecisionEngine:
                     visual_damage_found = True
 
             # Pre-calibration of visible damage type and severity based on claim context
+            uncalibrated_sev = visible_sev
             if visual_damage_found and claimed_part_visible:
                 visible_damage_type = calibrate_visual_issue(visible_damage_type, claimed_damage, claim_object)
                 visible_sev = calibrate_severity(visible_sev, visible_damage_type, claim_object, visible_part)
 
-            # Override damage to none if VLM detected a scratch/stain that is likely just the text instruction/annotation
+            # Override damage to none if VLM detected a scratch/stain/torn_packaging that is likely just the text instruction/annotation
             if "text_instruction_present" in risk_flags:
-                if visible_damage_type in ("scratch", "stain") and claimed_damage not in ("scratch", "stain"):
+                if visible_damage_type in ("scratch", "stain", "torn_packaging", "crushed_packaging") and claimed_damage not in ("scratch", "stain", "torn_packaging", "crushed_packaging"):
+                    visible_damage_type = "none"
+                    visible_sev = "none"
+                    visual_damage_found = False
+                elif claim_object == "package" and visible_damage_type == "torn_packaging" and visible_part != claimed_part:
                     visible_damage_type = "none"
                     visible_sev = "none"
                     visual_damage_found = False
@@ -747,7 +784,7 @@ class DecisionEngine:
                     claim_status_justification = f"The image clearly shows a {dmg_str} on the {part_str}."
                     if "blurry_image" in risk_flags and len(images_audited) > 1:
                         claim_status_justification = f"The clearer image supports the claim by showing a {dmg_str} on the {part_str}."
-                elif claimed_damage != "unknown" and are_issues_similar(claimed_damage, visible_damage_type, visible_sev):
+                elif claimed_damage != "unknown" and are_issues_similar(claimed_damage, visible_damage_type, uncalibrated_sev):
                     # Similar types — supported
                     claim_status = "supported"
                     issue_type = calibrate_visual_issue(visible_damage_type, claimed_damage, claim_object)
