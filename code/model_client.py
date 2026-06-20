@@ -147,14 +147,35 @@ class ModelClient:
         if self.cache:
             cached = self.cache.get(full_prompt)
             if cached is not None:
+                try:
+                    data = json.loads(cached)
+                    if isinstance(data, dict) and "response_text" in data:
+                        self.usage_stats["text_input_tokens"] += data.get("prompt_tokens", 0)
+                        self.usage_stats["text_output_tokens"] += data.get("completion_tokens", 0)
+                        self.usage_stats["text_calls"] += 1
+                        logger.info("Text response (with stats) retrieved from cache.")
+                        return data["response_text"]
+                except Exception:
+                    pass
                 logger.info("Text response retrieved from cache.")
                 return cached
 
+        in_before = self.usage_stats["text_input_tokens"]
+        out_before = self.usage_stats["text_output_tokens"]
+
         response = self._execute_with_retry(self._invoke_text_api, prompt, system_instruction)
         
+        in_diff = self.usage_stats["text_input_tokens"] - in_before
+        out_diff = self.usage_stats["text_output_tokens"] - out_before
+
         # Save to Cache
         if self.cache and response:
-            self.cache.set(full_prompt, response)
+            cache_val = json.dumps({
+                "response_text": response,
+                "prompt_tokens": in_diff,
+                "completion_tokens": out_diff
+            })
+            self.cache.set(full_prompt, cache_val)
         return response
 
     def call_vlm_model(self, prompt: str, image_paths: list[str]) -> str:
@@ -162,14 +183,35 @@ class ModelClient:
         if self.cache:
             cached = self.cache.get(prompt, image_paths)
             if cached is not None:
+                try:
+                    data = json.loads(cached)
+                    if isinstance(data, dict) and "response_text" in data:
+                        self.usage_stats["vlm_input_tokens"] += data.get("prompt_tokens", 0)
+                        self.usage_stats["vlm_output_tokens"] += data.get("completion_tokens", 0)
+                        self.usage_stats["vlm_calls"] += 1
+                        logger.info("VLM response (with stats) retrieved from cache.")
+                        return data["response_text"]
+                except Exception:
+                    pass
                 logger.info("VLM response retrieved from cache.")
                 return cached
 
+        in_before = self.usage_stats["vlm_input_tokens"]
+        out_before = self.usage_stats["vlm_output_tokens"]
+
         response = self._execute_with_retry(self._invoke_vlm_api, prompt, image_paths)
         
+        in_diff = self.usage_stats["vlm_input_tokens"] - in_before
+        out_diff = self.usage_stats["vlm_output_tokens"] - out_before
+
         # Save to Cache
         if self.cache and response:
-            self.cache.set(prompt, response, image_paths)
+            cache_val = json.dumps({
+                "response_text": response,
+                "prompt_tokens": in_diff,
+                "completion_tokens": out_diff
+            })
+            self.cache.set(prompt, cache_val, image_paths)
         return response
 
 

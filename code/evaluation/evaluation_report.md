@@ -4,13 +4,13 @@
 
 - **Total Claims Evaluated:** 20
 - **Claim Status Accuracy:** 95.00%
-- **Object Part Accuracy:** 100.00%
-- **Issue Type Accuracy:** 90.00%
+- **Object Part Accuracy:** 95.00%
+- **Issue Type Accuracy:** 85.00%
 - **Severity Accuracy:** 90.00%
 - **Evidence Standard Met Accuracy:** 100.00%
 - **Valid Image Accuracy:** 100.00%
-- **Risk Flags Exact Match Accuracy:** 50.00%
-- **Risk Flags Avg Jaccard Similarity:** 0.6375
+- **Risk Flags Exact Match Accuracy:** 45.00%
+- **Risk Flags Avg Jaccard Similarity:** 0.6043
 
 ### Confusion Matrix (Claim Status)
 | Expected \ Predicted | Supported | Contradicted | Not Enough Info |
@@ -31,17 +31,17 @@
 ### Performance Breakdown by Object Type
 | Object Type | Claims | Claim Status Acc | Object Part Acc | Issue Type Acc | Severity Acc |
 |---|---|---|---|---|---|
-| Car | 8 | 87.50% | 100.00% | 75.00% | 75.00% |
+| Car | 8 | 87.50% | 100.00% | 75.00% | 87.50% |
 | Laptop | 6 | 100.00% | 100.00% | 100.00% | 100.00% |
-| Package | 6 | 100.00% | 100.00% | 100.00% | 100.00% |
+| Package | 6 | 100.00% | 83.33% | 83.33% | 83.33% |
 
 
 ### Blind-vs-Aware VLM Audit Agreement Statistics
 | Agreement Category | Count | Percentage |
 |---|---|---|
-| Agree | 15 | 75.00% |
+| Agree | 14 | 70.00% |
 | Disagree Different Damage | 3 | 15.00% |
-| Reconciled Resolved | 2 | 10.00% |
+| Reconciled Resolved | 3 | 15.00% |
 
 
 ## Configuration Details & Strategy
@@ -52,14 +52,14 @@
 ## Operational Analysis (Actual Measured API Usage)
 
 - **Number of Actual API Calls:**
-  - VLM Image Audit calls: 0
-  - Text Extraction calls: 0
+  - VLM Image Audit calls: 43
+  - Text Extraction calls: 20
 - **Actual Measured API Token Usage:**
-  - VLM Input Tokens: 0
-  - VLM Output Tokens: 0
-  - Text Input Tokens: 0
-  - Text Output Tokens: 0
+  - VLM Input Tokens: 144099
+  - VLM Output Tokens: 13399
+  - Text Input Tokens: 10320
+  - Text Output Tokens: 681
 - **Number of Images Processed:** 29
-- **Actual Cost for this Run:** $0.00000 (pricing: input=$0.075/1M, output=$0.30/1M)
+- **Actual Cost for this Run:** $0.01581 (pricing: input=$0.075/1M, output=$0.30/1M)
 - **Caching Note:** Cache hits consumed 0 actual API tokens and incurred $0.00 actual cost.
 - **Approximate Latency:** ~2.5 seconds per claim (without caching; ~0.01 seconds with caching)
